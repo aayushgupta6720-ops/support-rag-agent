@@ -57,6 +57,15 @@ uvicorn app.main:app --reload
 Visit `http://localhost:8000/docs` for the interactive FastAPI docs, or hit
 `http://localhost:8000/health`.
 
+**If you're also using the MCP wrapper** (below), run without `--reload`
+instead. Uvicorn's file watcher scans the whole project tree, including
+`mcp_server/venv/` — launching that subprocess touches files there (e.g.
+bytecode cache), which the watcher treats as a code change and restarts the
+server mid-request, killing whatever call was in flight. `--reload-dir`/
+`--reload-exclude` don't reliably fix this (tested: still triggers on
+nested paths under an excluded dir), so just drop `--reload` when the MCP
+server might be running alongside it.
+
 Qdrant must be running (e.g. `docker run -p 6333:6333 qdrant/qdrant`) before
 you ingest docs or call `/chat`. Ingest the sample support docs with:
 

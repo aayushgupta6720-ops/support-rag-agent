@@ -33,7 +33,10 @@ def ask_support_agent(query: str, session_id: str | None = None) -> str:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
+    # Generous timeout: the agent retries with backoff on Gemini rate-limit
+    # errors (see app/core/generation.py), which can push a single call well
+    # past 30s under free-tier quota pressure.
+    with urllib.request.urlopen(request, timeout=120) as response:
         body = json.loads(response.read())
 
     answer = body["answer"]
