@@ -2,6 +2,10 @@
 
 [![GitHub repo](https://img.shields.io/badge/GitHub-support--rag--agent-181717?logo=github)](https://github.com/aayushgupta6720-ops/support-rag-agent)
 
+**Live demo:** https://support-rag-agent.onrender.com ([`/health`](https://support-rag-agent.onrender.com/health), `POST /chat`)
+— deployed on Render's free tier, so the first request after a period of
+inactivity takes ~30-60s to wake up.
+
 Async FastAPI RAG agent for support tickets — Python/async, FastAPI, RAG
 over Qdrant, LangGraph orchestration, an eval harness, and observability,
 built as a 6-step project targeting an internship posting with those
@@ -124,10 +128,19 @@ docker run --rm -p 8000:8000 \
 
 The app is a stateless container reading config from env vars, so it's
 deployable as-is. The one thing to plan for: **Qdrant needs a persistent,
-network-reachable home** — a single Cloud Run/Lambda container can't host it
-locally the way local dev does. Use [Qdrant Cloud](https://cloud.qdrant.io)
+network-reachable home** — a single Cloud Run/Lambda/Render container can't
+host it locally the way local dev does. Use [Qdrant Cloud](https://cloud.qdrant.io)
 (has a free tier) or run Qdrant on a VM/persistent-disk service, then point
-`QDRANT_URL` at it.
+`QDRANT_URL` (and `QDRANT_API_KEY`, if using Qdrant Cloud) at it.
+
+**Render** (what the live demo above actually runs on): `render.yaml` in the
+repo root defines the service as a Render Blueprint — Docker runtime, free
+plan, `/health` as the health check path. `GEMINI_API_KEY`, `QDRANT_URL`,
+and `QDRANT_API_KEY` are marked `sync: false` so Render prompts for them
+instead of storing them in the repo; paste in the same values from your
+local `.env`. Note that Render currently asks for a card on file even for
+the free plan (an account-level anti-abuse check, not a charge) —
+happens on both the Blueprint and manual "New Web Service" paths.
 
 **Google Cloud Run** (matches the existing Dockerfile directly):
 
@@ -206,6 +219,6 @@ whenever the tool is actually called.
       MCP wrapper
 
 All 6 steps are done. The repo is deploy-ready (Dockerfile, `$PORT` handling,
-secrets guidance) and includes an optional MCP wrapper; no cloud
-infrastructure has actually been provisioned — see "Deploy" above to do
-that against a real account.
+secrets guidance) and includes an optional MCP wrapper; it's also actually
+deployed — see the live demo link at the top, and "Deploy" above for how to
+reproduce it.
