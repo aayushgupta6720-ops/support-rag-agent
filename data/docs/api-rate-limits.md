@@ -8,7 +8,7 @@ When you exceed your limit, the API returns HTTP 429 with a `Retry-After`
 header indicating how many seconds to wait before retrying. We recommend
 exponential backoff with jitter rather than retrying immediately.
 
-Rate limit usage is tracked per API key, not per account, so creating
+Rate limit usage is tracked per account, not per API key, so creating
 additional keys does not increase your effective limit — all keys on an
 account share the same quota. If you need a higher limit for a legitimate
 use case, contact support with your expected request volume.
