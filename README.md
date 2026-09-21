@@ -162,6 +162,29 @@ python server.py   # stdio transport; point an MCP client at this command
 
 Set `SUPPORT_AGENT_URL` if the main app isn't on `http://localhost:8000`.
 
+To register it with Claude Desktop, add it to that app's config file
+(macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`;
+merge into whatever's already there rather than replacing the file), using
+the venv's own interpreter so it resolves regardless of what's on `PATH`:
+
+```json
+{
+  "mcpServers": {
+    "support-rag-agent": {
+      "command": "/absolute/path/to/support-rag-agent/mcp_server/venv/bin/python",
+      "args": ["/absolute/path/to/support-rag-agent/mcp_server/server.py"],
+      "env": {
+        "SUPPORT_AGENT_URL": "http://localhost:8000"
+      }
+    }
+  }
+}
+```
+
+Fully quit and relaunch Claude Desktop afterward — MCP servers are only
+picked up at startup. The main app (and Qdrant) need to already be running
+whenever the tool is actually called.
+
 ## Roadmap
 
 - [x] **Step 1** — Async FastAPI skeleton + Docker (this scaffold)
