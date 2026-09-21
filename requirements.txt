@@ -1,0 +1,8 @@
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.13.5
+pydantic-settings==2.6.0
+python-dotenv==1.0.1
+google-genai==2.24.0
+qdrant-client==1.19.1
+langgraph==1.2.11
