@@ -8,7 +8,8 @@ from app.core.config import get_settings
 
 @lru_cache
 def get_client() -> AsyncQdrantClient:
-    return AsyncQdrantClient(url=get_settings().qdrant_url)
+    settings = get_settings()
+    return AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None)
 
 
 async def ensure_collection() -> None:

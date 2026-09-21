@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str = ""
     qdrant_collection: str = "support_docs"
     gemini_api_key: str = ""
     embedding_model: str = "gemini-embedding-001"

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: support-rag-agent
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: QDRANT_COLLECTION
+        value: support_docs
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
