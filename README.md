@@ -1,5 +1,7 @@
 # support-rag-agent
 
+[![GitHub repo](https://img.shields.io/badge/GitHub-support--rag--agent-181717?logo=github)](https://github.com/aayushgupta6720-ops/support-rag-agent)
+
 Async FastAPI RAG agent for support tickets — Python/async, FastAPI, RAG
 over Qdrant, LangGraph orchestration, an eval harness, and observability,
 built as a 6-step project targeting an internship posting with those
