@@ -26,7 +26,9 @@ def chunk_text(text: str) -> list[str]:
             current = paragraph
         else:
             step = max_chars - overlap
-            for i in range(0, len(paragraph), step):
+            # Stop before len - overlap: a window starting there would sit
+            # entirely inside the previous window's overlap.
+            for i in range(0, len(paragraph) - overlap, step):
                 chunks.append(paragraph[i : i + max_chars])
 
     if current:

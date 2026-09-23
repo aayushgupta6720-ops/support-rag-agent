@@ -43,8 +43,10 @@ scripts/
 data/docs/             Sample support docs used by the ingestion script
 data/eval/             Golden set + timestamped eval run results
 mcp_server/            Optional MCP wrapper (separate venv, see below)
+tests/                 Offline unit tests (Gemini and Qdrant are faked)
 Dockerfile
 requirements.txt
+requirements-dev.txt   requirements.txt + pytest
 .env.example
 ```
 
@@ -139,6 +141,21 @@ versions were used — e.g.:
  "total_tokens": 956, "total_cost_usd": 8.7e-05,
  "steps": [{"name": "route", "latency_ms": 1358.47, ...}, ...]}
 ```
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Everything runs offline in well under a second: a conftest fixture makes any
+unfaked call to Gemini or Qdrant fail the test instead of spending quota.
+Covered: agent routing (tool call → retrieval → grounded prompt, direct
+answers, empty retrieval, tool call with no query argument), 429 retry/backoff,
+chunking, retrieval and ingestion, the `/chat` endpoint and its log line,
+tracing and cost math, eval scoring, and golden-set integrity (unique ids,
+known categories, every expected doc id exists in `data/docs/`).
 
 ## Run with Docker
 

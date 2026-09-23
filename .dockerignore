@@ -8,3 +8,6 @@ venv/
 *.md
 data/eval/results/
 mcp_server/
+tests/
+requirements-dev.txt
+pytest.ini
