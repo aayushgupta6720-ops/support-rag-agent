@@ -6,10 +6,9 @@
 — deployed on Render's free tier, so the first request after a period of
 inactivity takes ~30-60s to wake up.
 
-Async FastAPI RAG agent for support tickets — Python/async, FastAPI, RAG
-over Qdrant, LangGraph orchestration, an eval harness, and observability,
-built as a 6-step project targeting an internship posting with those
-requirements.
+Async FastAPI RAG agent for support tickets — RAG over Qdrant, LangGraph
+orchestration, an eval harness (golden set + LLM-as-judge), and per-call
+latency/cost observability.
 
 ## Structure
 
