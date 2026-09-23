@@ -96,7 +96,7 @@ timestamped JSON report under `data/eval/results/`. A case that raises (e.g.
 a Gemini 503 during a demand spike) is recorded as an error and left out of
 the rates instead of aborting the run.
 
-The golden set (`data/eval/golden_set.jsonl`) has 59 cases. Most of them test
+The golden set (`data/eval/golden_set.jsonl`) has 65 cases. Most of them test
 failure modes, not whether the model can find the answer to an easy question:
 
 | Category | Cases | What it checks |
@@ -106,10 +106,10 @@ failure modes, not whether the model can find the answer to an easy question:
 | `false_premise` | 6 | Question assumes something the docs contradict ("SMS 2FA setup?") |
 | `multi_doc` | 5 | A complete answer needs facts from two docs |
 | `unanswerable` | 6 | In-domain but not in the docs — must not invent a price, phone number, etc. |
-| `out_of_scope` | 2 | Not a support question — should stay in role |
-| `adversarial` | 5 | Prompt injection and social engineering |
+| `out_of_scope` | 4 | Not a support question — should stay in role |
+| `adversarial` | 7 | Prompt injection and social engineering |
 | `robustness` | 3 | Typos, Spanish, vague phrasing |
-| `direct` | 4 | Greetings and small talk — no retrieval |
+| `direct` | 6 | Greetings and small talk — no retrieval |
 
 Pass rates are per category because an aggregate hides the weak spots. With
 this few cases per category, treat a single run as a smoke signal, not a
