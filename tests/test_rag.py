@@ -1,10 +1,16 @@
 from types import SimpleNamespace
 
+import pytest
+from google.genai.errors import ClientError
+
+import app.rag.embeddings as embeddings
 import app.rag.ingest as ingest
 import app.rag.retrieval as retrieval
 from app.core.config import get_settings
+from app.core.gemini_client import DailyQuotaExhaustedError
 from app.core.observability import start_trace
 from app.core.pricing import embedding_cost_usd
+from tests.fakes import DAILY, rate_limited_error
 
 
 def _embed_response(values, billable_chars):
@@ -98,3 +104,21 @@ async def test_ingest_with_no_chunks_skips_embedding(monkeypatch):
     monkeypatch.setattr(ingest, "upsert_points", fail)
 
     assert await ingest.ingest_documents([]) == 0
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (rate_limited_error(quota_id=DAILY), DailyQuotaExhaustedError),
+        (ClientError(400, {"error": {"code": 400, "message": "bad"}}), ClientError),
+    ],
+)
+def test_embedding_errors_surface_daily_quota_distinctly(monkeypatch, error, expected):
+    def embed_content(**kwargs):
+        raise error
+
+    fake_client = SimpleNamespace(models=SimpleNamespace(embed_content=embed_content))
+    monkeypatch.setattr(embeddings, "get_gemini_client", lambda: fake_client)
+
+    with pytest.raises(expected):
+        embeddings._embed_sync(["text"], "RETRIEVAL_QUERY")

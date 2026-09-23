@@ -1,21 +1,31 @@
 import asyncio
 
 from google.genai import types
+from google.genai.errors import ClientError
 
 from app.core.config import get_settings
-from app.core.gemini_client import get_gemini_client
+from app.core.gemini_client import (
+    DailyQuotaExhaustedError,
+    get_gemini_client,
+    is_daily_quota_error,
+)
 
 
 def _embed_sync(texts: list[str], task_type: str) -> types.EmbedContentResponse:
     settings = get_settings()
-    return get_gemini_client().models.embed_content(
-        model=settings.embedding_model,
-        contents=texts,
-        config=types.EmbedContentConfig(
-            task_type=task_type,
-            output_dimensionality=settings.embedding_dim,
-        ),
-    )
+    try:
+        return get_gemini_client().models.embed_content(
+            model=settings.embedding_model,
+            contents=texts,
+            config=types.EmbedContentConfig(
+                task_type=task_type,
+                output_dimensionality=settings.embedding_dim,
+            ),
+        )
+    except ClientError as exc:
+        if is_daily_quota_error(exc):
+            raise DailyQuotaExhaustedError(str(exc)) from exc
+        raise
 
 
 async def embed_documents(texts: list[str]) -> list[list[float]]:

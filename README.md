@@ -233,6 +233,16 @@ Either way, use your platform's secret manager for `GEMINI_API_KEY` (Secret
 Manager / SSM Parameter Store), not a plain env var in the deploy command —
 those tend to leak into logs, `describe` output, and shell history.
 
+**Quota:** on the Gemini free tier, `gemini-3.5-flash-lite` (what
+`gemini-flash-lite-latest` resolves to) allows 500 requests/day per Google
+project, shared by everything using that project's keys. A full eval run is
+~200 requests, so give the deployed service a key from its own project;
+otherwise a couple of eval runs can exhaust the demo's quota. When the daily
+quota is gone, `/chat` returns a 503 explaining that, in under a second.
+Gemini's 429 for a per-day quota still suggests retrying in ~60s, and
+trusting that used to make each request hang for minutes and then 500.
+Per-minute 429s are still retried with the suggested delay.
+
 ## Optional: MCP wrapper
 
 `mcp_server/` exposes `/chat` as an MCP tool (`ask_support_agent`) so an MCP

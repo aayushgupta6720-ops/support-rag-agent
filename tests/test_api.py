@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api.routes as routes
+from app.core.gemini_client import DailyQuotaExhaustedError
 from app.core.observability import time_step
 from app.main import app
 from tests.fakes import chunk
@@ -73,3 +74,17 @@ def test_chat_failure_is_logged_with_error_then_returns_500(client, logged, monk
     assert response.status_code == 500
     [event] = logged
     assert event["error"] == "gemini exploded"
+
+
+def test_daily_quota_returns_503_with_a_clear_message(client, logged, monkeypatch):
+    async def quota_exhausted(query):
+        raise DailyQuotaExhaustedError("429 RESOURCE_EXHAUSTED")
+
+    monkeypatch.setattr(routes, "run_agent", quota_exhausted)
+
+    response = client.post("/chat", json={"query": "anything"})
+
+    assert response.status_code == 503
+    assert "daily quota" in response.json()["detail"]
+    [event] = logged
+    assert event["error_type"] == "DailyQuotaExhaustedError"

@@ -4,13 +4,8 @@ import pytest
 from google.genai.errors import ClientError, ServerError
 
 import app.core.generation as generation
-
-
-def _rate_limited(retry_delay: str | None = "7s") -> ClientError:
-    details = []
-    if retry_delay:
-        details.append({"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": retry_delay})
-    return ClientError(429, {"error": {"code": 429, "message": "quota", "details": details}})
+from app.core.gemini_client import DailyQuotaExhaustedError, is_daily_quota_error
+from tests.fakes import DAILY, PER_MINUTE, rate_limited_error
 
 
 class FakeModels:
@@ -46,16 +41,16 @@ def _call():
 
 
 def test_retry_delay_parsed_from_retry_info():
-    assert generation._rate_limit_retry_delay(_rate_limited("7s"), fallback=1) == 7.0
-    assert generation._rate_limit_retry_delay(_rate_limited("0.5s"), fallback=1) == 0.5
+    assert generation._rate_limit_retry_delay(rate_limited_error("7s"), fallback=1) == 7.0
+    assert generation._rate_limit_retry_delay(rate_limited_error("0.5s"), fallback=1) == 0.5
 
 
 def test_retry_delay_falls_back_without_retry_info():
-    assert generation._rate_limit_retry_delay(_rate_limited(None), fallback=4) == 4
+    assert generation._rate_limit_retry_delay(rate_limited_error(None), fallback=4) == 4
 
 
 def test_retries_rate_limit_then_succeeds(client):
-    models, sleeps = client([_rate_limited("3s"), _rate_limited(None), "response"])
+    models, sleeps = client([rate_limited_error("3s"), rate_limited_error(None), "response"])
 
     assert _call() == "response"
     assert models.calls == 3
@@ -64,7 +59,7 @@ def test_retries_rate_limit_then_succeeds(client):
 
 
 def test_gives_up_after_max_retries(client):
-    models, sleeps = client([_rate_limited()] * generation._MAX_RATE_LIMIT_RETRIES)
+    models, sleeps = client([rate_limited_error()] * generation._MAX_RATE_LIMIT_RETRIES)
 
     with pytest.raises(ClientError):
         _call()
@@ -86,3 +81,28 @@ def test_other_errors_are_not_retried(client, error):
         _call()
     assert models.calls == 1
     assert sleeps == []
+
+
+def test_daily_quota_fails_fast_instead_of_sleeping_on_retry_delay(client):
+    # Gemini still sends retryDelay ~59s on a per-day quota; trusting it made
+    # every /chat call hang for minutes and then 500 once the quota ran out.
+    models, sleeps = client([rate_limited_error("59s", quota_id=DAILY), "never reached"])
+
+    with pytest.raises(DailyQuotaExhaustedError):
+        _call()
+    assert models.calls == 1
+    assert sleeps == []
+
+
+def test_per_minute_quota_is_still_retried(client):
+    models, sleeps = client([rate_limited_error("5s", quota_id=PER_MINUTE), "response"])
+
+    assert _call() == "response"
+    assert sleeps == [5.0]
+
+
+def test_only_429s_naming_a_per_day_quota_count_as_daily():
+    assert is_daily_quota_error(rate_limited_error(quota_id=DAILY))
+    assert not is_daily_quota_error(rate_limited_error(quota_id=PER_MINUTE))
+    assert not is_daily_quota_error(rate_limited_error(quota_id=None))
+    assert not is_daily_quota_error(ClientError(400, {"error": {"code": 400, "message": "bad"}}))

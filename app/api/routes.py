@@ -1,8 +1,9 @@
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.agent.graph import run_agent
+from app.core.gemini_client import DailyQuotaExhaustedError
 from app.core.observability import log_event, start_trace
 from app.models.schemas import ChatRequest, ChatResponse, HealthResponse
 
@@ -37,9 +38,18 @@ async def chat(request: ChatRequest) -> ChatResponse:
             session_id=request.session_id,
             query=request.query,
             error=str(exc),
+            error_type=type(exc).__name__,
             latency_ms=round((time.perf_counter() - start) * 1000, 2),
             steps=trace.as_dicts(),
         )
+        if isinstance(exc, DailyQuotaExhaustedError):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "The Gemini API's daily quota for this demo is used up. "
+                    "It resets at midnight Pacific time; please try again after that."
+                ),
+            ) from exc
         raise
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)

@@ -7,7 +7,11 @@ from google.genai.errors import ClientError
 from pydantic import BaseModel
 
 from app.core.config import get_settings
-from app.core.gemini_client import get_gemini_client
+from app.core.gemini_client import (
+    DailyQuotaExhaustedError,
+    get_gemini_client,
+    is_daily_quota_error,
+)
 
 _MAX_RATE_LIMIT_RETRIES = 5
 
@@ -46,6 +50,8 @@ def _generate_sync(
                 config=config,
             )
         except ClientError as exc:
+            if is_daily_quota_error(exc):
+                raise DailyQuotaExhaustedError(str(exc)) from exc
             if exc.code != 429 or attempt == _MAX_RATE_LIMIT_RETRIES:
                 raise
             time.sleep(_rate_limit_retry_delay(exc, fallback=2**attempt))
