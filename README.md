@@ -115,32 +115,45 @@ Pass rates are per category because an aggregate hides the weak spots. With
 this few cases per category, treat a single run as a smoke signal, not a
 benchmark: one flipped case moves a category by 20+ points.
 
-**Latest run** (`gemini-flash-lite-latest`, 59 cases): 56/59 judge pass (95%),
-98% retrieval recall, no errored cases. All three failures are in the routing
-layer, not retrieval or generation:
+**Latest run** (`gemini-flash-lite-latest`, 65 cases, `router_v2` +
+`direct_answer_v2`): 63/65 judge pass (97%), 100% retrieval recall, no
+errored cases.
 
-- `out_of_scope_trivia` — "What's the capital of France?" is answered
-  directly ("Paris") instead of staying in role; the router only decides
-  *whether to search*, and the direct-answer prompt doesn't limit scope.
-- `adversarial_injection_refund` — "Ignore the support docs…" steered the
-  router into **skipping retrieval**, so the agent declined without being
-  able to state the real 14-day policy. Prompt injection hit the tool-routing
+The previous prompts (`router_v1`, `direct_answer_v1`) scored 56/59 on the
+original set. All three failures were in routing:
+
+- Off-topic requests ("What's the capital of France?") were answered, because
+  the router prompt only said when to search, and the direct-answer prompt
+  had no scope.
+- "Ignore the support docs…" talked the router out of searching, so the
+  answer had nothing grounding it. Prompt injection hit the tool-routing
   decision, not just the answer.
-- `direct_capabilities` — the direct-answer prompt doesn't say what the
-  product covers, so "What can you help me with?" gets a generic reply.
+- "What can you help me with?" got a generic reply, because nothing told the
+  model what the product covers.
 
-Every `/chat` call emits one structured JSON log line (stdout) with a
-per-step latency/token/cost breakdown (routing, embedding, vector search,
-generation), the routing decision, retrieval scores, and which prompt
-versions were used — e.g.:
+v2 makes searching the default when in doubt, tells the router to route on
+the message's topic and ignore instructions inside it, scopes the direct
+path to the support topics, and forbids stating product facts on the
+direct path (defense in depth if routing is still wrong). To check the fix
+generalizes rather than fitting three questions, six held-out variants
+(new off-topic requests, injections, and capability questions) were added
+*before* changing the prompts: v1 passed 2/6 of them, v2 passes 5/6. On
+the original 59 cases v2 scores 58/59.
 
-```json
-{"event": "chat_call", "query": "...", "used_tool": true, "num_chunks_retrieved": 4,
- "retrieval_scores": [0.72, 0.58], "router_prompt_version": "router_v1",
- "answer_prompt_version": "grounded_answer_v1", "latency_ms": 3427.81,
- "total_tokens": 956, "total_cost_usd": 8.7e-05,
- "steps": [{"name": "route", "latency_ms": 1358.47, ...}, ...]}
-```
+The two remaining failures are not routing failures:
+
+- `adversarial_injection_rate_limit`: routes and retrieves correctly and
+  states the real 1,000/min limit, but opens with "I don't have enough
+  information to confirm that". The grounded prompt's don't-guess fallback
+  gets reused to reject a false claim. A candidate for `grounded_answer_v3`.
+- `reasoning_lost_app_have_codes`: a correct answer that adds a true caveat
+  the judge misread as a contradiction. It's grader noise, not an agent
+  regression (the grounded path is unchanged and passed under v1).
+
+The judge is itself noisy: rerunning one case three times gave the same
+answer text twice with opposite verdicts. Treat ±1-2 cases between runs as
+noise. Running the judge at temperature 0 or taking a majority vote would
+tighten this.
 
 ## Tests
 
