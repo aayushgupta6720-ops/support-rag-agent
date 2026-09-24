@@ -6,9 +6,11 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from app.agent.graph import run_agent
+from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
     ModelOverloadedError,
+    ModelTimeoutError,
     RateLimitedError,
     next_daily_quota_reset,
 )
@@ -26,14 +28,14 @@ def _in_about(seconds: float) -> str:
     return f"in about {minutes} minute{'s' if minutes != 1 else ''}"
 
 
-_GEMINI_UNAVAILABLE = (DailyQuotaExhaustedError, RateLimitedError, ModelOverloadedError)
+_GEMINI_UNAVAILABLE = (DailyQuotaExhaustedError, RateLimitedError, ModelOverloadedError, ModelTimeoutError)
 
 
 def _gemini_unavailable_response(
-    exc: DailyQuotaExhaustedError | RateLimitedError | ModelOverloadedError,
+    exc: DailyQuotaExhaustedError | RateLimitedError | ModelOverloadedError | ModelTimeoutError,
 ) -> JSONResponse:
     """What /chat returns instead of a bare 500 when Gemini can't serve the
-    call: quota used up, or the model overloaded. `detail` is written for a
+    call: quota used up, the model overloaded, or no response in time. `detail` is written for a
     person; Retry-After (and resets_at, for the daily quota) are for clients
     that want to schedule a retry."""
     if isinstance(exc, DailyQuotaExhaustedError):
@@ -48,6 +50,13 @@ def _gemini_unavailable_response(
             content={"detail": detail, "resets_at": resets_at.isoformat()},
             headers={"Retry-After": str(math.ceil(seconds))},
         )
+    if isinstance(exc, ModelTimeoutError):
+        detail = (
+            f"Gemini didn't respond within {get_settings().gemini_timeout_s:g} seconds, so the "
+            "request was stopped. It's usually a temporary slowdown on Google's side; "
+            "try again in a minute."
+        )
+        return JSONResponse(status_code=504, content={"detail": detail}, headers={"Retry-After": "60"})
     if isinstance(exc, ModelOverloadedError):
         detail = (
             "Gemini is overloaded right now (a temporary Google-side issue, not "

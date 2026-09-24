@@ -45,17 +45,21 @@ def ask_support_agent(query: str, session_id: str | None = None) -> str:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    # Generous timeout: the agent retries with backoff on Gemini rate-limit
-    # errors (see app/core/generation.py), which can push a single call well
-    # past 30s under free-tier quota pressure.
+    # Sized from the agent's worst case, not its typical ~5s: a /chat call
+    # makes up to three Gemini calls (route, embed, generate), each allowed
+    # gemini_timeout_s (60s), plus retry backoff on 429s and 503s. A shorter
+    # limit here gives up on answers the agent is still about to deliver.
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
+        with urllib.request.urlopen(request, timeout=240) as response:
             body = json.loads(response.read())
     except urllib.error.HTTPError as exc:
         # Only a ToolError's message reaches the model: any other exception
         # becomes a bare "Error executing tool". Pass the API's explanation on
         # so the model can tell the user why, and when to try again.
         raise ToolError(_error_detail(exc)) from exc
+    except (TimeoutError, urllib.error.URLError) as exc:
+        reason = getattr(exc, "reason", exc)
+        raise ToolError(f"Couldn't get an answer from the support agent at {SUPPORT_AGENT_URL} ({reason}).") from exc
 
     answer = body["answer"]
     sources = body.get("sources", [])

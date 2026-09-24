@@ -6,5 +6,7 @@ python-dotenv==1.0.1
 google-genai==2.24.0
 qdrant-client==1.19.1
 langgraph==1.2.11
+# imported directly to recognise Gemini call timeouts (google-genai uses it)
+httpx==0.28.1
 # zoneinfo's time zone data, for the quota reset time; slim images lack the OS copy
 tzdata==2026.4

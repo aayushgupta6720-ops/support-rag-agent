@@ -9,7 +9,7 @@ from app.core.gemini_client import (
     RateLimitedError,
     get_gemini_client,
     is_daily_quota_error,
-    retry_overloaded,
+    call_gemini,
 )
 
 # Gemini rejects an embed request with more than 100 texts ("at most 100
@@ -20,7 +20,7 @@ MAX_TEXTS_PER_REQUEST = 100
 def _embed_sync(texts: list[str], task_type: str) -> types.EmbedContentResponse:
     settings = get_settings()
     try:
-        return retry_overloaded(
+        return call_gemini(
             lambda: get_gemini_client().models.embed_content(
                 model=settings.embedding_model,
                 contents=texts,

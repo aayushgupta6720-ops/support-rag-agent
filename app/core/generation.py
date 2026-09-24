@@ -12,7 +12,7 @@ from app.core.gemini_client import (
     RateLimitedError,
     get_gemini_client,
     is_daily_quota_error,
-    retry_overloaded,
+    call_gemini,
 )
 
 _MAX_RATE_LIMIT_RETRIES = 5
@@ -46,7 +46,7 @@ def _generate_sync(
 
     for attempt in range(1, _MAX_RATE_LIMIT_RETRIES + 1):
         try:
-            return retry_overloaded(
+            return call_gemini(
                 lambda: get_gemini_client().models.generate_content(
                     model=settings.generation_model,
                     contents=contents,

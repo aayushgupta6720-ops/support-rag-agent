@@ -253,7 +253,10 @@ messages through to the model, so it can tell the user why and when to retry.
 Gemini also has capacity spikes, answering 503 UNAVAILABLE ("high demand")
 even with quota to spare. Those are retried after 1s, 2s and 4s; if the model
 is still overloaded, `/chat` returns a 503 saying it's a temporary Google-side
-issue (`Retry-After: 60`) instead of a bare 500.
+issue (`Retry-After: 60`) instead of a bare 500. A Gemini call that gets no
+response within `GEMINI_TIMEOUT_S` (60s) is stopped rather than left hanging,
+and `/chat` returns a 504 saying so. The MCP proxy waits up to 240s, enough
+for the three Gemini calls a `/chat` can make.
 
 ## Optional: MCP wrapper
 

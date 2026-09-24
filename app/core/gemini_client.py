@@ -5,7 +5,9 @@ from functools import lru_cache
 from typing import TypeVar
 from zoneinfo import ZoneInfo
 
+import httpx
 from google import genai
+from google.genai import types
 from google.genai.errors import ClientError, ServerError
 
 from app.core.config import get_settings
@@ -20,7 +22,13 @@ T = TypeVar("T")
 
 @lru_cache
 def get_gemini_client() -> genai.Client:
-    return genai.Client(api_key=get_settings().gemini_api_key)
+    settings = get_settings()
+    return genai.Client(
+        api_key=settings.gemini_api_key,
+        # Milliseconds, applied to connecting and to each read, so a stream
+        # that stalls partway is caught as well as one that never starts.
+        http_options=types.HttpOptions(timeout=int(settings.gemini_timeout_s * 1000)),
+    )
 
 
 class DailyQuotaExhaustedError(Exception):
@@ -32,13 +40,26 @@ class ModelOverloadedError(Exception):
     retries: a Google-side capacity spike, not anything wrong with the call."""
 
 
-def retry_overloaded(call: Callable[[], T]) -> T:
-    """call(), retried with a short backoff while Gemini answers 503
-    UNAVAILABLE, which Google says is usually temporary. Raises
-    ModelOverloadedError once the retries run out; other errors pass through."""
+class ModelTimeoutError(Exception):
+    """A Gemini call got no response within gemini_timeout_s: usually a
+    Google-side slowdown rather than anything wrong with the call."""
+
+
+def call_gemini(call: Callable[[], T]) -> T:
+    """call(), with Gemini's transient failures handled:
+    - 503 UNAVAILABLE, which Google says is usually temporary, is retried
+      with a short backoff and becomes ModelOverloadedError once the retries
+      run out.
+    - A call that times out becomes ModelTimeoutError straight away, since a
+      retry would double an already long wait.
+    Other errors pass through."""
     for attempt in range(1, _MAX_OVERLOAD_ATTEMPTS + 1):
         try:
             return call()
+        except httpx.TimeoutException as exc:
+            raise ModelTimeoutError(
+                f"no response from Gemini within {get_settings().gemini_timeout_s:g}s"
+            ) from exc
         except ServerError as exc:
             if exc.code != 503:
                 raise

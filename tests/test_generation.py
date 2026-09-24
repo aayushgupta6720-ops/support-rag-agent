@@ -7,6 +7,7 @@ import app.core.generation as generation
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
     ModelOverloadedError,
+    ModelTimeoutError,
     RateLimitedError,
     is_daily_quota_error,
     next_daily_quota_reset,
@@ -151,3 +152,27 @@ def test_persistent_overload_becomes_model_overloaded_error(client):
         _call()
     assert models.calls == 4
     assert sleeps == [1, 2, 4]  # ~7s in all: long enough for a blip, not a spike
+
+
+def test_a_call_that_times_out_fails_fast_without_retrying(client):
+    import httpx
+
+    models, sleeps = client([httpx.ReadTimeout("timed out"), "never reached"])
+
+    with pytest.raises(ModelTimeoutError):
+        _call()
+    assert models.calls == 1
+    assert sleeps == []
+
+
+def test_gemini_client_is_built_with_the_configured_timeout(monkeypatch):
+    from app.core import gemini_client
+    from app.core.config import Settings
+
+    monkeypatch.setattr(gemini_client, "get_settings", lambda: Settings(_env_file=None, gemini_api_key="x", gemini_timeout_s=12.5))
+    gemini_client.get_gemini_client.cache_clear()
+    try:
+        client = gemini_client.get_gemini_client()
+        assert client._api_client._http_options.timeout == 12_500  # milliseconds
+    finally:
+        gemini_client.get_gemini_client.cache_clear()
