@@ -1,13 +1,51 @@
+import math
 import time
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from app.agent.graph import run_agent
-from app.core.gemini_client import DailyQuotaExhaustedError
+from app.core.gemini_client import (
+    DailyQuotaExhaustedError,
+    RateLimitedError,
+    next_daily_quota_reset,
+)
 from app.core.observability import log_event, start_trace
 from app.models.schemas import ChatRequest, ChatResponse, HealthResponse
 
 router = APIRouter()
+
+
+def _in_about(seconds: float) -> str:
+    if seconds >= 3600:
+        hours = round(seconds / 3600)
+        return f"in about {hours} hour{'s' if hours != 1 else ''}"
+    minutes = max(1, round(seconds / 60))
+    return f"in about {minutes} minute{'s' if minutes != 1 else ''}"
+
+
+def _quota_response(exc: DailyQuotaExhaustedError | RateLimitedError) -> JSONResponse:
+    """What /chat returns instead of a bare 500 when Gemini's quota runs out.
+    `detail` is written for a person; Retry-After (and resets_at, for the
+    daily quota) are for clients that want to schedule a retry."""
+    if isinstance(exc, DailyQuotaExhaustedError):
+        resets_at = next_daily_quota_reset()
+        seconds = max(0.0, (resets_at - datetime.now(timezone.utc)).total_seconds())
+        detail = (
+            "The Gemini API's daily quota for this demo is used up. It resets at "
+            f"midnight Pacific time ({_in_about(seconds)}); please try again after that."
+        )
+        return JSONResponse(
+            status_code=503,
+            content={"detail": detail, "resets_at": resets_at.isoformat()},
+            headers={"Retry-After": str(math.ceil(seconds))},
+        )
+    detail = (
+        "The Gemini API is getting more requests than this demo's quota allows. "
+        "Wait a minute and try again."
+    )
+    return JSONResponse(status_code=429, content={"detail": detail}, headers={"Retry-After": "60"})
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -17,7 +55,7 @@ async def health() -> HealthResponse:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
     """
     Agentic chat endpoint.
 
@@ -42,14 +80,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             latency_ms=round((time.perf_counter() - start) * 1000, 2),
             steps=trace.as_dicts(),
         )
-        if isinstance(exc, DailyQuotaExhaustedError):
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "The Gemini API's daily quota for this demo is used up. "
-                    "It resets at midnight Pacific time; please try again after that."
-                ),
-            ) from exc
+        if isinstance(exc, (DailyQuotaExhaustedError, RateLimitedError)):
+            return _quota_response(exc)
         raise
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)

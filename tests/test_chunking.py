@@ -49,7 +49,39 @@ def test_hard_split_emits_no_chunk_already_covered_by_the_overlap():
     assert [len(c) for c in chunks] == [50, 50]
 
 
-def test_paragraph_after_a_hard_split_starts_fresh():
+TEN_WORDS = "one two three four five six seven eight nine ten"  # 48 chars
+
+
+def test_new_chunk_opens_with_the_previous_chunks_tail_cut_at_a_word_boundary():
+    chunks = chunking.chunk_text(f"{TEN_WORDS}\n\neleven twelve")
+
+    # the last 10 chars are "t nine ten"; the partial "t" is dropped
+    assert chunks == [TEN_WORDS, "nine ten\n\neleven twelve"]
+
+
+def test_overlap_shrinks_rather_than_hard_splitting_a_paragraph_that_fits_alone():
+    roomy, tight = "z" * 44, "z" * 47
+
+    # 44 + separator leaves room for 4 chars of overlap ("ten"), 47 for none
+    assert chunking.chunk_text(f"{TEN_WORDS}\n\n{roomy}") == [TEN_WORDS, f"ten\n\n{roomy}"]
+    assert chunking.chunk_text(f"{TEN_WORDS}\n\n{tight}") == [TEN_WORDS, tight]
+
+
+def test_paragraph_after_a_hard_split_overlaps_only_the_last_window():
+    # the hard split's leftover isn't carried over whole, just the usual tail
+    chunks = chunking.chunk_text(f"{'word ' * 14}end\n\ntail")
+
+    assert chunks[-1] == "word end\n\ntail"
+
+
+def test_no_overlap_when_the_previous_chunk_ends_in_one_long_word():
     chunks = chunking.chunk_text(f"{'x' * 60}\n\ntail")
 
     assert chunks[-1] == "tail"
+
+
+def test_every_chunk_respects_the_limit_with_overlap():
+    words = " ".join(f"w{i}" for i in range(40))
+    text = "\n\n".join([TEN_WORDS, words, "short", TEN_WORDS, "eleven twelve"])
+
+    assert all(len(c) <= MAX for c in chunking.chunk_text(text))

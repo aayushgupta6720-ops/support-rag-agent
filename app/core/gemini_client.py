@@ -1,9 +1,13 @@
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from zoneinfo import ZoneInfo
 
 from google import genai
 from google.genai.errors import ClientError
 
 from app.core.config import get_settings
+
+_PACIFIC = ZoneInfo("America/Los_Angeles")
 
 
 @lru_cache
@@ -13,6 +17,18 @@ def get_gemini_client() -> genai.Client:
 
 class DailyQuotaExhaustedError(Exception):
     """Gemini's per-day quota is used up; no retry can succeed until it resets."""
+
+
+class RateLimitedError(Exception):
+    """Gemini kept rate-limiting a call (a per-minute quota) past our retries.
+    Unlike DailyQuotaExhaustedError, trying again in a minute can work."""
+
+
+def next_daily_quota_reset(now: datetime | None = None) -> datetime:
+    """When Gemini's per-day quotas next reset: midnight Pacific time."""
+    pacific_now = (now or datetime.now(timezone.utc)).astimezone(_PACIFIC)
+    tomorrow = pacific_now.date() + timedelta(days=1)
+    return datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=_PACIFIC)
 
 
 def is_daily_quota_error(exc: ClientError) -> bool:

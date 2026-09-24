@@ -4,7 +4,12 @@ import pytest
 from google.genai.errors import ClientError, ServerError
 
 import app.core.generation as generation
-from app.core.gemini_client import DailyQuotaExhaustedError, is_daily_quota_error
+from app.core.gemini_client import (
+    DailyQuotaExhaustedError,
+    RateLimitedError,
+    is_daily_quota_error,
+    next_daily_quota_reset,
+)
 from tests.fakes import DAILY, PER_MINUTE, rate_limited_error
 
 
@@ -61,7 +66,8 @@ def test_retries_rate_limit_then_succeeds(client):
 def test_gives_up_after_max_retries(client):
     models, sleeps = client([rate_limited_error()] * generation._MAX_RATE_LIMIT_RETRIES)
 
-    with pytest.raises(ClientError):
+    # distinct from other ClientErrors, so /chat can say "wait a minute"
+    with pytest.raises(RateLimitedError):
         _call()
     assert models.calls == generation._MAX_RATE_LIMIT_RETRIES
     assert len(sleeps) == generation._MAX_RATE_LIMIT_RETRIES - 1
@@ -106,3 +112,20 @@ def test_only_429s_naming_a_per_day_quota_count_as_daily():
     assert not is_daily_quota_error(rate_limited_error(quota_id=PER_MINUTE))
     assert not is_daily_quota_error(rate_limited_error(quota_id=None))
     assert not is_daily_quota_error(ClientError(400, {"error": {"code": 400, "message": "bad"}}))
+
+
+@pytest.mark.parametrize(
+    ("now_utc", "expected"),
+    [
+        # 16:06 PDT on the 23rd: resets at the coming midnight
+        ("2026-09-23T23:06:00+00:00", "2026-09-24T00:00:00-07:00"),
+        # 00:30 PDT on the 24th: just reset, so the next one is a day away
+        ("2026-09-24T07:30:00+00:00", "2026-09-25T00:00:00-07:00"),
+        # after DST ends, midnight Pacific is UTC-8
+        ("2026-11-05T12:00:00+00:00", "2026-11-06T00:00:00-08:00"),
+    ],
+)
+def test_daily_quota_resets_at_the_next_pacific_midnight(now_utc, expected):
+    from datetime import datetime
+
+    assert next_daily_quota_reset(datetime.fromisoformat(now_utc)).isoformat() == expected

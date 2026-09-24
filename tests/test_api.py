@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api.routes as routes
-from app.core.gemini_client import DailyQuotaExhaustedError
+from app.core.gemini_client import DailyQuotaExhaustedError, RateLimitedError
 from app.core.observability import time_step
 from app.main import app
 from tests.fakes import chunk
@@ -85,6 +85,32 @@ def test_daily_quota_returns_503_with_a_clear_message(client, logged, monkeypatc
     response = client.post("/chat", json={"query": "anything"})
 
     assert response.status_code == 503
-    assert "daily quota" in response.json()["detail"]
+    body = response.json()
+    assert "daily quota" in body["detail"]
+    assert "midnight Pacific time (in about" in body["detail"]
+    assert "RESOURCE_EXHAUSTED" not in body["detail"]
+    assert body["resets_at"].startswith(("20", "21"))  # an ISO timestamp
+    assert 0 < int(response.headers["Retry-After"]) <= 24 * 3600
     [event] = logged
     assert event["error_type"] == "DailyQuotaExhaustedError"
+
+
+def test_per_minute_quota_past_the_retries_returns_429_not_500(client, logged, monkeypatch):
+    async def rate_limited(query):
+        raise RateLimitedError("429 RESOURCE_EXHAUSTED")
+
+    monkeypatch.setattr(routes, "run_agent", rate_limited)
+
+    response = client.post("/chat", json={"query": "anything"})
+
+    assert response.status_code == 429
+    assert "Wait a minute" in response.json()["detail"]
+    assert response.headers["Retry-After"] == "60"
+
+
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [(8 * 3600 - 300, "in about 8 hours"), (3600, "in about 1 hour"), (90, "in about 2 minutes"), (5, "in about 1 minute")],
+)
+def test_reset_time_reads_naturally(seconds, expected):
+    assert routes._in_about(seconds) == expected

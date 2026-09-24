@@ -2,15 +2,18 @@ from types import SimpleNamespace
 
 import pytest
 from google.genai.errors import ClientError
+from qdrant_client import AsyncQdrantClient
 
 import app.rag.embeddings as embeddings
 import app.rag.ingest as ingest
+import app.rag.qdrant_store as qdrant_store
 import app.rag.retrieval as retrieval
+import scripts.ingest as ingest_script
 from app.core.config import get_settings
-from app.core.gemini_client import DailyQuotaExhaustedError
+from app.core.gemini_client import DailyQuotaExhaustedError, RateLimitedError
 from app.core.observability import start_trace
 from app.core.pricing import embedding_cost_usd
-from tests.fakes import DAILY, rate_limited_error
+from tests.fakes import DAILY, PER_MINUTE, rate_limited_error
 
 
 def _embed_response(values, billable_chars):
@@ -69,7 +72,7 @@ def test_point_ids_are_stable_across_runs_and_unique_per_chunk():
 
 
 async def test_ingest_embeds_every_chunk_and_upserts_with_payload(monkeypatch):
-    embedded, upserted = [], []
+    embedded, upserted, stale_checked = [], [], []
 
     async def fake_embed(texts):
         embedded.extend(texts)
@@ -78,9 +81,13 @@ async def test_ingest_embeds_every_chunk_and_upserts_with_payload(monkeypatch):
     async def fake_upsert(points):
         upserted.extend(points)
 
+    async def fake_delete_stale(chunk_counts):
+        stale_checked.append(chunk_counts)
+
     monkeypatch.setattr(ingest, "chunk_text", lambda text: text.split("|"))
     monkeypatch.setattr(ingest, "embed_documents", fake_embed)
     monkeypatch.setattr(ingest, "upsert_points", fake_upsert)
+    monkeypatch.setattr(ingest, "delete_stale_chunks", fake_delete_stale)
 
     count = await ingest.ingest_documents([
         ingest.Document(doc_id="a", title="A", text="a0|a1"),
@@ -88,28 +95,127 @@ async def test_ingest_embeds_every_chunk_and_upserts_with_payload(monkeypatch):
     ])
 
     assert count == 3
-    assert embedded == ["a0", "a1", "b0"]
+    # every chunk, not just the first, carries its doc's title
+    assert embedded == ["# A\n\na0", "# A\n\na1", "# B\n\nb0"]
     assert [(p.payload["doc_id"], p.payload["chunk_index"], p.payload["text"]) for p in upserted] == [
-        ("a", 0, "a0"), ("a", 1, "a1"), ("b", 0, "b0"),
+        ("a", 0, "# A\n\na0"), ("a", 1, "# A\n\na1"), ("b", 0, "# B\n\nb0"),
     ]
     assert [p.vector for p in upserted] == [[0.0], [1.0], [2.0]]
     assert upserted[1].id == ingest._point_id("a", 1)
+    assert stale_checked == [{"a": 2, "b": 1}]
 
 
-async def test_ingest_with_no_chunks_skips_embedding(monkeypatch):
+async def test_ingest_with_no_documents_touches_nothing(monkeypatch):
     async def fail(*args):
         raise AssertionError("should not be called")
 
     monkeypatch.setattr(ingest, "embed_documents", fail)
     monkeypatch.setattr(ingest, "upsert_points", fail)
 
-    assert await ingest.ingest_documents([]) == 0
+    assert await ingest.ingest_documents([], prune_missing=True) == 0
+
+
+async def test_doc_that_is_now_empty_still_has_its_old_chunks_deleted(monkeypatch):
+    stale_checked = []
+
+    async def fail(*args):
+        raise AssertionError("should not be called")
+
+    async def fake_delete_stale(chunk_counts):
+        stale_checked.append(chunk_counts)
+
+    monkeypatch.setattr(ingest, "embed_documents", fail)
+    monkeypatch.setattr(ingest, "upsert_points", fail)
+    monkeypatch.setattr(ingest, "delete_stale_chunks", fake_delete_stale)
+
+    assert await ingest.ingest_documents([ingest.Document(doc_id="a", title="A", text="  ")]) == 0
+    assert stale_checked == [{"a": 0}]
+
+
+@pytest.fixture
+def qdrant(monkeypatch):
+    """An in-process Qdrant, so ingest's filtered deletes run against real
+    filter semantics without a server. Embeddings are faked."""
+    client = AsyncQdrantClient(location=":memory:")
+    monkeypatch.setattr(qdrant_store, "get_client", lambda: client)
+
+    async def fake_embed(texts):
+        return [[1.0] * get_settings().embedding_dim for _ in texts]
+
+    monkeypatch.setattr(ingest, "embed_documents", fake_embed)
+    monkeypatch.setattr(ingest, "chunk_text", lambda text: text.split("|"))
+    return client
+
+
+async def _stored_chunks(client):
+    points, _ = await client.scroll(get_settings().qdrant_collection, limit=100)
+    return sorted((p.payload["doc_id"], p.payload["chunk_index"]) for p in points)
+
+
+@pytest.mark.filterwarnings("ignore:Payload indexes have no effect")
+async def test_reingesting_a_shorter_doc_deletes_its_leftover_chunks(qdrant):
+    await ingest.ingest_documents([
+        ingest.Document(doc_id="a", title="A", text="a0|a1|a2"),
+        ingest.Document(doc_id="b", title="B", text="b0|b1"),
+    ])
+
+    await ingest.ingest_documents([ingest.Document(doc_id="a", title="A", text="a0")])
+
+    # a's chunks 1-2 are gone; b wasn't re-ingested and is left alone
+    assert await _stored_chunks(qdrant) == [("a", 0), ("b", 0), ("b", 1)]
+
+
+@pytest.mark.filterwarnings("ignore:Payload indexes have no effect")
+async def test_prune_missing_deletes_docs_no_longer_in_the_corpus(qdrant):
+    await ingest.ingest_documents([
+        ingest.Document(doc_id="a", title="A", text="a0"),
+        ingest.Document(doc_id="b", title="B", text="b0|b1"),
+    ])
+
+    await ingest.ingest_documents([ingest.Document(doc_id="a", title="A", text="a0")], prune_missing=True)
+
+    assert await _stored_chunks(qdrant) == [("a", 0)]
+
+
+async def test_store_deletes_refuse_to_match_everything():
+    # an empty `should` or MatchAny would select every point in the collection
+    await qdrant_store.delete_stale_chunks({})  # no-op; conftest fails any Qdrant call
+    with pytest.raises(ValueError):
+        await qdrant_store.delete_documents_except([])
+
+
+async def test_embed_documents_splits_requests_at_the_api_limit(monkeypatch):
+    batch_sizes = []
+
+    def fake_embed_sync(texts, task_type):
+        batch_sizes.append(len(texts))
+        return SimpleNamespace(embeddings=[SimpleNamespace(values=[text]) for text in texts])
+
+    monkeypatch.setattr(embeddings, "_embed_sync", fake_embed_sync)
+    texts = [f"t{i}" for i in range(2 * embeddings.MAX_TEXTS_PER_REQUEST + 1)]
+
+    vectors = await embeddings.embed_documents(texts)
+
+    assert batch_sizes == [100, 100, 1]
+    assert vectors == [[text] for text in texts]  # order preserved across batches
+
+
+def test_loader_moves_the_h1_heading_into_the_title(tmp_path, monkeypatch):
+    (tmp_path / "billing.md").write_text("# Billing and Refunds\n\nBody text.\n")
+    (tmp_path / "plain.md").write_text("No heading here.\n")
+    monkeypatch.setattr(ingest_script, "DOCS_DIR", tmp_path)
+
+    assert ingest_script.load_documents() == [
+        ingest.Document(doc_id="billing", title="Billing and Refunds", text="Body text."),
+        ingest.Document(doc_id="plain", title="plain", text="No heading here."),
+    ]
 
 
 @pytest.mark.parametrize(
     ("error", "expected"),
     [
         (rate_limited_error(quota_id=DAILY), DailyQuotaExhaustedError),
+        (rate_limited_error(quota_id=PER_MINUTE), RateLimitedError),
         (ClientError(400, {"error": {"code": 400, "message": "bad"}}), ClientError),
     ],
 )

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
+    RateLimitedError,
     get_gemini_client,
     is_daily_quota_error,
 )
@@ -52,8 +53,10 @@ def _generate_sync(
         except ClientError as exc:
             if is_daily_quota_error(exc):
                 raise DailyQuotaExhaustedError(str(exc)) from exc
-            if exc.code != 429 or attempt == _MAX_RATE_LIMIT_RETRIES:
+            if exc.code != 429:
                 raise
+            if attempt == _MAX_RATE_LIMIT_RETRIES:
+                raise RateLimitedError(str(exc)) from exc
             time.sleep(_rate_limit_retry_delay(exc, fallback=2**attempt))
 
     raise AssertionError("unreachable")

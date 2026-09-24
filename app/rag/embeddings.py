@@ -6,9 +6,14 @@ from google.genai.errors import ClientError
 from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
+    RateLimitedError,
     get_gemini_client,
     is_daily_quota_error,
 )
+
+# Gemini rejects an embed request with more than 100 texts ("at most 100
+# requests can be in one batch").
+MAX_TEXTS_PER_REQUEST = 100
 
 
 def _embed_sync(texts: list[str], task_type: str) -> types.EmbedContentResponse:
@@ -25,12 +30,20 @@ def _embed_sync(texts: list[str], task_type: str) -> types.EmbedContentResponse:
     except ClientError as exc:
         if is_daily_quota_error(exc):
             raise DailyQuotaExhaustedError(str(exc)) from exc
+        if exc.code == 429:
+            raise RateLimitedError(str(exc)) from exc
         raise
 
 
 async def embed_documents(texts: list[str]) -> list[list[float]]:
-    response = await asyncio.to_thread(_embed_sync, texts, "RETRIEVAL_DOCUMENT")
-    return [embedding.values for embedding in response.embeddings]
+    vectors: list[list[float]] = []
+    # Sequential, not concurrent: parallel batches would just trip the
+    # per-minute quota sooner.
+    for start in range(0, len(texts), MAX_TEXTS_PER_REQUEST):
+        batch = texts[start : start + MAX_TEXTS_PER_REQUEST]
+        response = await asyncio.to_thread(_embed_sync, batch, "RETRIEVAL_DOCUMENT")
+        vectors.extend(embedding.values for embedding in response.embeddings)
+    return vectors
 
 
 async def embed_query_response(text: str) -> types.EmbedContentResponse:

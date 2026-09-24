@@ -20,10 +20,10 @@ app/
   core/gemini_client.py Shared, cached google-genai client
   models/schemas.py    Pydantic request/response models
   rag/
-    chunking.py        Paragraph-packing text chunker
-    embeddings.py       Gemini embedding calls (gemini-embedding-001)
-    qdrant_store.py     Async Qdrant client, collection setup, search
-    ingest.py           Chunk + embed + upsert documents
+    chunking.py        Paragraph-packing text chunker with word-boundary overlap
+    embeddings.py       Gemini embedding calls (gemini-embedding-001), batched at 100
+    qdrant_store.py     Async Qdrant client, collection setup, search, stale-chunk deletes
+    ingest.py           Chunk + title-prefix + embed + upsert documents
     retrieval.py        Embed a query and fetch top-k chunks
   agent/
     graph.py           LangGraph agent: route -> (retrieve) -> generate
@@ -77,6 +77,10 @@ you ingest docs or call `/chat`. Ingest the sample support docs with:
 ```bash
 python -m scripts.ingest
 ```
+
+Re-running it is safe: chunk IDs are deterministic, so changed docs are
+overwritten in place, chunks left over when a doc gets shorter are deleted,
+and docs removed from `data/docs/` are removed from Qdrant too.
 
 Then `POST /chat` with `{"query": "..."}`. A LangGraph agent routes the query:
 a router call decides whether to call the `search_support_docs` tool or
@@ -238,10 +242,14 @@ those tend to leak into logs, `describe` output, and shell history.
 project, shared by everything using that project's keys. A full eval run is
 ~200 requests, so give the deployed service a key from its own project;
 otherwise a couple of eval runs can exhaust the demo's quota. When the daily
-quota is gone, `/chat` returns a 503 explaining that, in under a second.
-Gemini's 429 for a per-day quota still suggests retrying in ~60s, and
-trusting that used to make each request hang for minutes and then 500.
-Per-minute 429s are still retried with the suggested delay.
+quota is gone, `/chat` returns a 503 in under a second whose `detail` says
+when it resets ("in about 8 hours"), plus a `Retry-After` header and a
+`resets_at` timestamp. Gemini's 429 for a per-day quota still suggests
+retrying in ~60s, and trusting that used to make each request hang for
+minutes and then 500. Per-minute 429s are still retried with the suggested
+delay; if they outlast the retries, `/chat` returns a 429 asking to wait a
+minute (`Retry-After: 60`) instead of a bare 500. The MCP tool passes these
+messages through to the model, so it can tell the user why and when to retry.
 
 ## Optional: MCP wrapper
 

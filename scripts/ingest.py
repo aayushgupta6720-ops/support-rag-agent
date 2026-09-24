@@ -19,9 +19,13 @@ def load_documents() -> list[Document]:
     documents = []
     for path in sorted(DOCS_DIR.glob("*.md")):
         text = path.read_text(encoding="utf-8").strip()
-        first_line = text.splitlines()[0] if text else path.stem
-        title = first_line.lstrip("#").strip() or path.stem
-        documents.append(Document(doc_id=path.stem, title=title, text=text))
+        title, body = path.stem, text
+        first_line, _, rest = text.partition("\n")
+        if first_line.startswith("#"):
+            # Ingest heads every chunk with the title, so leaving the heading
+            # in the body would repeat it in the first chunk.
+            title, body = first_line.lstrip("#").strip() or path.stem, rest.strip()
+        documents.append(Document(doc_id=path.stem, title=title, text=body))
     return documents
 
 
@@ -31,7 +35,9 @@ async def main() -> None:
         print(f"No .md files found in {DOCS_DIR}")
         return
 
-    chunk_count = await ingest_documents(documents)
+    # data/docs is the whole corpus: drop anything in Qdrant from docs that
+    # have since been deleted here.
+    chunk_count = await ingest_documents(documents, prune_missing=True)
     print(f"Ingested {len(documents)} documents into {chunk_count} chunks.")
 
 
