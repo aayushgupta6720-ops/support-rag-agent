@@ -6,6 +6,7 @@ from google.genai.errors import ClientError, ServerError
 import app.core.generation as generation
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
+    ModelOverloadedError,
     RateLimitedError,
     is_daily_quota_error,
     next_daily_quota_reset,
@@ -129,3 +130,24 @@ def test_daily_quota_resets_at_the_next_pacific_midnight(now_utc, expected):
     from datetime import datetime
 
     assert next_daily_quota_reset(datetime.fromisoformat(now_utc)).isoformat() == expected
+
+
+def _overloaded() -> ServerError:
+    return ServerError(503, {"error": {"code": 503, "message": "high demand", "status": "UNAVAILABLE"}})
+
+
+def test_overload_503_is_retried_with_short_backoff_then_succeeds(client):
+    models, sleeps = client([_overloaded(), _overloaded(), "response"])
+
+    assert _call() == "response"
+    assert models.calls == 3
+    assert sleeps == [1, 2]
+
+
+def test_persistent_overload_becomes_model_overloaded_error(client):
+    models, sleeps = client([_overloaded()] * 4)
+
+    with pytest.raises(ModelOverloadedError):
+        _call()
+    assert models.calls == 4
+    assert sleeps == [1, 2, 4]  # ~7s in all: long enough for a blip, not a spike

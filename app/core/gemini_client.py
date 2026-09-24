@@ -1,13 +1,21 @@
+import time
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from typing import TypeVar
 from zoneinfo import ZoneInfo
 
 from google import genai
-from google.genai.errors import ClientError
+from google.genai.errors import ClientError, ServerError
 
 from app.core.config import get_settings
 
 _PACIFIC = ZoneInfo("America/Los_Angeles")
+# A 503 "high demand" usually clears within seconds to minutes: retry a few
+# times (1s, 2s, 4s) rather than make a user wait out a long spike.
+_MAX_OVERLOAD_ATTEMPTS = 4
+
+T = TypeVar("T")
 
 
 @lru_cache
@@ -17,6 +25,27 @@ def get_gemini_client() -> genai.Client:
 
 class DailyQuotaExhaustedError(Exception):
     """Gemini's per-day quota is used up; no retry can succeed until it resets."""
+
+
+class ModelOverloadedError(Exception):
+    """Gemini kept answering 503 UNAVAILABLE ("high demand") past our
+    retries: a Google-side capacity spike, not anything wrong with the call."""
+
+
+def retry_overloaded(call: Callable[[], T]) -> T:
+    """call(), retried with a short backoff while Gemini answers 503
+    UNAVAILABLE, which Google says is usually temporary. Raises
+    ModelOverloadedError once the retries run out; other errors pass through."""
+    for attempt in range(1, _MAX_OVERLOAD_ATTEMPTS + 1):
+        try:
+            return call()
+        except ServerError as exc:
+            if exc.code != 503:
+                raise
+            if attempt == _MAX_OVERLOAD_ATTEMPTS:
+                raise ModelOverloadedError(str(exc)) from exc
+            time.sleep(2 ** (attempt - 1))
+    raise AssertionError("unreachable")
 
 
 class RateLimitedError(Exception):

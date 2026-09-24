@@ -250,6 +250,10 @@ minutes and then 500. Per-minute 429s are still retried with the suggested
 delay; if they outlast the retries, `/chat` returns a 429 asking to wait a
 minute (`Retry-After: 60`) instead of a bare 500. The MCP tool passes these
 messages through to the model, so it can tell the user why and when to retry.
+Gemini also has capacity spikes, answering 503 UNAVAILABLE ("high demand")
+even with quota to spare. Those are retried after 1s, 2s and 4s; if the model
+is still overloaded, `/chat` returns a 503 saying it's a temporary Google-side
+issue (`Retry-After: 60`) instead of a bare 500.
 
 ## Optional: MCP wrapper
 

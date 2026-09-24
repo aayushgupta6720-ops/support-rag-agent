@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.agent.graph import run_agent
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
+    ModelOverloadedError,
     RateLimitedError,
     next_daily_quota_reset,
 )
@@ -25,10 +26,16 @@ def _in_about(seconds: float) -> str:
     return f"in about {minutes} minute{'s' if minutes != 1 else ''}"
 
 
-def _quota_response(exc: DailyQuotaExhaustedError | RateLimitedError) -> JSONResponse:
-    """What /chat returns instead of a bare 500 when Gemini's quota runs out.
-    `detail` is written for a person; Retry-After (and resets_at, for the
-    daily quota) are for clients that want to schedule a retry."""
+_GEMINI_UNAVAILABLE = (DailyQuotaExhaustedError, RateLimitedError, ModelOverloadedError)
+
+
+def _gemini_unavailable_response(
+    exc: DailyQuotaExhaustedError | RateLimitedError | ModelOverloadedError,
+) -> JSONResponse:
+    """What /chat returns instead of a bare 500 when Gemini can't serve the
+    call: quota used up, or the model overloaded. `detail` is written for a
+    person; Retry-After (and resets_at, for the daily quota) are for clients
+    that want to schedule a retry."""
     if isinstance(exc, DailyQuotaExhaustedError):
         resets_at = next_daily_quota_reset()
         seconds = max(0.0, (resets_at - datetime.now(timezone.utc)).total_seconds())
@@ -41,6 +48,12 @@ def _quota_response(exc: DailyQuotaExhaustedError | RateLimitedError) -> JSONRes
             content={"detail": detail, "resets_at": resets_at.isoformat()},
             headers={"Retry-After": str(math.ceil(seconds))},
         )
+    if isinstance(exc, ModelOverloadedError):
+        detail = (
+            "Gemini is overloaded right now (a temporary Google-side issue, not "
+            "a problem with your question). Try again in a minute."
+        )
+        return JSONResponse(status_code=503, content={"detail": detail}, headers={"Retry-After": "60"})
     detail = (
         "The Gemini API is getting more requests than this demo's quota allows. "
         "Wait a minute and try again."
@@ -80,8 +93,8 @@ async def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
             latency_ms=round((time.perf_counter() - start) * 1000, 2),
             steps=trace.as_dicts(),
         )
-        if isinstance(exc, (DailyQuotaExhaustedError, RateLimitedError)):
-            return _quota_response(exc)
+        if isinstance(exc, _GEMINI_UNAVAILABLE):
+            return _gemini_unavailable_response(exc)
         raise
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)

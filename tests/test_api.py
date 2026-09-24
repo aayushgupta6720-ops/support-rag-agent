@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api.routes as routes
-from app.core.gemini_client import DailyQuotaExhaustedError, RateLimitedError
+from app.core.gemini_client import DailyQuotaExhaustedError, ModelOverloadedError, RateLimitedError
 from app.core.observability import time_step
 from app.main import app
 from tests.fakes import chunk
@@ -106,6 +106,22 @@ def test_per_minute_quota_past_the_retries_returns_429_not_500(client, logged, m
     assert response.status_code == 429
     assert "Wait a minute" in response.json()["detail"]
     assert response.headers["Retry-After"] == "60"
+
+
+def test_overloaded_model_returns_503_saying_it_is_temporary(client, logged, monkeypatch):
+    async def overloaded(query):
+        raise ModelOverloadedError("503 UNAVAILABLE. {'error': {...}}")
+
+    monkeypatch.setattr(routes, "run_agent", overloaded)
+
+    response = client.post("/chat", json={"query": "anything"})
+
+    assert response.status_code == 503
+    assert "Gemini is overloaded right now" in response.json()["detail"]
+    assert "UNAVAILABLE" not in response.json()["detail"]
+    assert response.headers["Retry-After"] == "60"
+    [event] = logged
+    assert event["error_type"] == "ModelOverloadedError"
 
 
 @pytest.mark.parametrize(
