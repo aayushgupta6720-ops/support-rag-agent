@@ -10,6 +10,8 @@ services:
         value: production
       - key: QDRANT_COLLECTION
         value: support_docs
+      - key: CLIENT_IP_HEADER
+        value: CF-Connecting-IP   # Render sits behind Cloudflare, which sets this; the rate limit keys on it
       - key: GEMINI_API_KEY
         sync: false
       - key: QDRANT_URL

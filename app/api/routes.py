@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from app.agent.graph import run_agent
+from app.api.ratelimit import rate_limit
 from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
@@ -76,7 +77,7 @@ async def health() -> HealthResponse:
     return HealthResponse(status="healthy", timestamp=time.time())
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse, dependencies=[rate_limit("chat")])
 async def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
     """
     Agentic chat endpoint.

@@ -16,6 +16,8 @@ latency/cost observability.
 app/
   main.py              FastAPI app instance, mounts the router
   api/routes.py        /health and /chat endpoints
+  api/ratelimit.py     Per-visitor /chat limits
+  api/body_limit.py    Refuses oversized request bodies before they're read
   core/config.py       Settings, loaded from .env
   core/gemini_client.py Shared, cached google-genai client
   models/schemas.py    Pydantic request/response models
@@ -257,6 +259,41 @@ issue (`Retry-After: 60`) instead of a bare 500. A Gemini call that gets no
 response within `GEMINI_TIMEOUT_S` (60s) is stopped rather than left hanging,
 and `/chat` returns a 504 saying so. The MCP proxy waits up to 240s, enough
 for the three Gemini calls a `/chat` can make.
+
+**Limits:** the quota is shared by everyone using the demo, so each visitor
+(an IP address; for IPv6, its /64) can ask 6 questions a minute and 30 a
+day. Past that, `/chat` returns a 429 with `Retry-After` and a `detail`
+saying when to try again, without calling the model; the MCP tool passes
+that message on. Change the numbers with `CHAT_LIMIT_PER_MINUTE` and
+`CHAT_LIMIT_PER_DAY` (0 turns one off). Counts are in memory, which suits
+the free plan's single instance, and reset on restart. A `query` can be up
+to 2,000 characters and a request body up to 64 KB; a bigger body is
+refused with a 413 before it's read, since FastAPI otherwise reads and
+parses all of it first (a 52 MB body took the server from 134 to 419 MB).
+
+Behind a proxy, the connecting address is the proxy's, so
+`CLIENT_IP_HEADER` names the header that carries the visitor's IP. On
+Render that's `CF-Connecting-IP`: Cloudflare, in front of Render, sets it
+and refuses requests that bring their own. Not `X-Forwarded-For`: Render
+appends to it, so its first entry is whatever the visitor sent. If the
+configured header is missing from a request, everyone without it shares one
+count. `render.yaml` sets `CLIENT_IP_HEADER`, but only a service created
+from the Blueprint picks that up; otherwise set it in the dashboard.
+
+To check it after a deploy without spending quota, send 7 empty questions
+(each is counted, then refused with a 422 before any model call), each with
+a made-up `X-Forwarded-For`:
+
+```bash
+for i in $(seq 7); do curl -s -o /dev/null -w '%{http_code} ' \
+  -H "X-Forwarded-For: 10.9.9.$i" -H 'Content-Type: application/json' \
+  -d '{"query": ""}' https://support-rag-agent.onrender.com/chat; done
+```
+
+Six `422`s then a `429` means the made-up headers didn't count as new
+visitors. It uses a minute's worth of your own allowance. Run it against the
+deployed app rather than localhost, where uvicorn trusts `X-Forwarded-For`
+from `127.0.0.1`.
 
 ## Optional: MCP wrapper
 

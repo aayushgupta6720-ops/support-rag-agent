@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     chunk_max_chars: int = 800
     chunk_overlap_chars: int = 100
 
+    # Per-visitor limits on /chat (see app/api/ratelimit.py), so one visitor
+    # can't use up the shared daily Gemini quota. 0 turns a limit off.
+    chat_limit_per_minute: int = 6
+    chat_limit_per_day: int = 30
+    # A header holding the visitor's IP, set by a proxy in front of the app
+    # that overwrites any client-sent copy (behind Cloudflare, as on Render:
+    # CF-Connecting-IP). Unset means the connecting address, right when
+    # nothing sits in front. Never X-Forwarded-For: visitors can forge it.
+    client_ip_header: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

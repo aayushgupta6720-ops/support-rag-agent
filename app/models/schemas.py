@@ -7,9 +7,13 @@ class HealthResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    query: str = Field(..., min_length=1, description="User's question for the agent.")
+    # Each query goes to Gemini up to three times and into the logs, so an
+    # unbounded one can use up the per-minute token quota for everyone. The
+    # longest golden-set question is ~150 chars; this leaves room for a
+    # pasted error message.
+    query: str = Field(..., min_length=1, max_length=2000, description="User's question for the agent.")
     session_id: str | None = Field(
-        default=None, description="Optional session/thread id for multi-turn context."
+        default=None, max_length=64, description="Optional session/thread id for multi-turn context."
     )
 
 
