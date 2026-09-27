@@ -63,6 +63,22 @@ def test_chat_returns_answer_and_logs_one_structured_event(client, logged, monke
     assert [s["name"] for s in event["steps"]] == ["generate"]
 
 
+def test_chat_lists_each_source_doc_once(client, logged, monkeypatch):
+    # sources come one per retrieved chunk, and a doc often has two of the top 4
+    per_chunk = ["password-reset", "two-factor-auth", "two-factor-auth", "billing-refunds"]
+
+    async def fake_run_agent(query):
+        return {"answer": "...", "sources": per_chunk, "chunks": [chunk(doc_id) for doc_id in per_chunk]}
+
+    monkeypatch.setattr(routes, "run_agent", fake_run_agent)
+
+    response = client.post("/chat", json={"query": "reset password"})
+
+    assert response.json()["sources"] == ["password-reset", "two-factor-auth", "billing-refunds"]
+    # the log keeps one entry per chunk, lined up with retrieval_scores
+    assert logged[0]["sources"] == per_chunk
+
+
 def test_chat_rejects_empty_query(client, logged):
     assert client.post("/chat", json={"query": ""}).status_code == 422
     assert logged == []

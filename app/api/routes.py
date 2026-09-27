@@ -131,6 +131,8 @@ async def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
 
     return ChatResponse(
         answer=answer,
-        sources=sources,
+        # One entry per retrieved chunk, so a doc with two chunks in the top k
+        # was listed twice. The log line above keeps them per chunk.
+        sources=list(dict.fromkeys(sources)),
         latency_ms=elapsed_ms,
     )
