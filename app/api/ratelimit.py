@@ -46,9 +46,9 @@ class RateLimiter:
         self._hits: OrderedDict[str, deque[float]] = OrderedDict()
 
     def hit(self, key: str) -> tuple[Limit, float] | None:
-        """Count a request from `key`. If one of the limits is already
-        reached, count nothing and return that limit and the seconds until it
-        allows another request."""
+        """Count a request from `key`. If a limit is already reached, count
+        nothing and return that limit and the seconds until it allows another
+        request: the longest wait, when more than one is reached."""
         if not self.limits:
             return None
         now = self._clock()
@@ -58,10 +58,13 @@ class RateLimiter:
             hits.popleft()
         self._hits[key] = hits  # re-inserted last: the most recently seen key
 
+        refusals = []
         for limit in self.limits:
             in_window = [t for t in hits if now - t < limit.window_s]
             if len(in_window) >= limit.count:
-                return limit, in_window[-limit.count] + limit.window_s - now
+                refusals.append((limit, in_window[-limit.count] + limit.window_s - now))
+        if refusals:
+            return max(refusals, key=lambda refusal: refusal[1])
 
         hits.append(now)
         while len(self._hits) > self.max_keys:

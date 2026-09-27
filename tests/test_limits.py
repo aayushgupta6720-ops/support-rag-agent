@@ -88,6 +88,20 @@ def test_the_window_slides_and_refused_requests_do_not_count():
     assert limiter.hit("a") is None
 
 
+def test_when_both_limits_are_reached_the_refusal_gives_the_longer_wait():
+    now = [0.0]
+    limiter = RateLimiter("questions", [Limit(6, 60, "a minute"), Limit(30, 86400, "a day")], clock=lambda: now[0])
+    for i in range(30):  # the day's 30, the last 6 inside one minute
+        now[0] = i * 600.0 if i < 24 else 20000.0 + i
+        assert limiter.hit("a") is None
+
+    now[0] = 20060.0
+    limit, wait = limiter.hit("a")
+
+    # not "try again in a few seconds" only to be refused again for the day
+    assert limit.per == "a day" and wait == 86400 - now[0]
+
+
 # ---- query length ------------------------------------------------------------------------
 
 
