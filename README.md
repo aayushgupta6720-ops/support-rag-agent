@@ -266,7 +266,8 @@ day. Past that, `/chat` returns a 429 with `Retry-After` and a `detail`
 saying when to try again, without calling the model; the MCP tool passes
 that message on. Change the numbers with `CHAT_LIMIT_PER_MINUTE` and
 `CHAT_LIMIT_PER_DAY` (0 turns one off). Counts are in memory, which suits
-the free plan's single instance, and reset on restart. A `query` can be up
+the free plan's single instance (the Dockerfile pins one worker process
+so they aren't split), and reset on restart. A `query` can be up
 to 2,000 characters and a request body up to 64 KB; a bigger body is
 refused with a 413 before it's read, since FastAPI otherwise reads and
 parses all of it first (a 52 MB body took the server from 134 to 419 MB).
