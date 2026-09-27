@@ -127,9 +127,12 @@ def _duration(seconds: int) -> str:
 
 def rate_limit(name: str):
     """A route dependency that refuses the request with a 429 once this
-    visitor is over the `name` limits."""
+    visitor is over the `name` limits. Async, though it never awaits, so it
+    runs on the event loop one request at a time: FastAPI runs a sync
+    dependency in a threadpool, where requests arriving together interleaved
+    inside RateLimiter.hit and got past the limit."""
 
-    def check(request: Request) -> None:
+    async def check(request: Request) -> None:
         limiter: RateLimiter = request.app.state.rate_limiters[name]
         key = client_key(request)
         refused = limiter.hit(key)

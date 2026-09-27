@@ -1,5 +1,7 @@
 """Per-visitor rate limit, query length cap and request body cap on /chat."""
 
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
@@ -58,6 +60,27 @@ def test_forged_forwarded_headers_do_not_reset_the_count_and_others_are_unaffect
 
     assert _ask(client, "198.51.100.4", **{"X-Forwarded-For": "1.2.3.4"}).status_code == 429
     assert _ask(client, "203.0.113.9").status_code == 200
+
+
+def test_the_count_is_kept_on_the_event_loop_where_requests_cannot_interleave(agent_calls, behind_render, monkeypatch):
+    # RateLimiter.hit has no lock. Run in FastAPI's threadpool, as a sync
+    # dependency is, requests arriving together interleaved inside it: some got
+    # past the limit, others a 500 from "deque mutated during iteration".
+    limiter = app.state.rate_limiters["chat"]
+    real_hit, on_event_loop = limiter.hit, []
+
+    def hit(key):
+        try:
+            asyncio.get_running_loop()
+            on_event_loop.append(True)
+        except RuntimeError:  # no event loop in this thread
+            on_event_loop.append(False)
+        return real_hit(key)
+
+    monkeypatch.setattr(limiter, "hit", hit)
+
+    assert _ask(TestClient(app), "198.51.100.4").status_code == 200
+    assert on_event_loop == [True]
 
 
 def _request(peer, **headers):
