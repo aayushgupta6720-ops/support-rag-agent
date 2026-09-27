@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
     RateLimitedError,
+    fits_retry_window,
     get_gemini_client,
     is_daily_quota_error,
     call_gemini,
@@ -58,9 +59,10 @@ def _generate_sync(
                 raise DailyQuotaExhaustedError(str(exc)) from exc
             if exc.code != 429:
                 raise
-            if attempt == _MAX_RATE_LIMIT_RETRIES:
+            delay = _rate_limit_retry_delay(exc, fallback=2**attempt)
+            if attempt == _MAX_RATE_LIMIT_RETRIES or not fits_retry_window(delay):
                 raise RateLimitedError(str(exc)) from exc
-            time.sleep(_rate_limit_retry_delay(exc, fallback=2**attempt))
+            time.sleep(delay)
 
     raise AssertionError("unreachable")
 

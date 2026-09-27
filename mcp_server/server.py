@@ -47,7 +47,8 @@ def ask_support_agent(query: str, session_id: str | None = None) -> str:
     )
     # Sized from the agent's worst case, not its typical ~5s: a /chat call
     # makes up to three Gemini calls (route, embed, generate), each allowed
-    # gemini_timeout_s (60s), plus retry backoff on 429s and 503s. A shorter
+    # gemini_timeout_s (60s), and retries 429s and 503s only in its first
+    # 45s (_RETRY_WINDOW_S in app/api/routes.py): 225s at most. A shorter
     # limit here gives up on answers the agent is still about to deliver.
     try:
         with urllib.request.urlopen(request, timeout=240) as response:

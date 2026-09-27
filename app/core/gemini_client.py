@@ -1,3 +1,4 @@
+import contextvars
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -18,6 +19,28 @@ _PACIFIC = ZoneInfo("America/Los_Angeles")
 _MAX_OVERLOAD_ATTEMPTS = 4
 
 T = TypeVar("T")
+
+# time.monotonic() after which the current request's Gemini calls stop
+# retrying, if it set one (see start_retry_window). None: no limit, as for
+# the eval and ingest scripts.
+_retry_deadline: contextvars.ContextVar[float | None] = contextvars.ContextVar(
+    "retry_deadline", default=None
+)
+
+
+def start_retry_window(seconds: float) -> None:
+    """Let Gemini calls made from here on in this context retry only for the
+    next `seconds`. The 429 and 503 loops nest and follow Gemini's own
+    suggested delays, so without a shared limit their waits add up across a
+    request's calls with no bound."""
+    _retry_deadline.set(time.monotonic() + seconds)
+
+
+def fits_retry_window(delay: float) -> bool:
+    """True if a retry after sleeping `delay` seconds would still start
+    inside the current retry window."""
+    deadline = _retry_deadline.get()
+    return deadline is None or time.monotonic() + delay <= deadline
 
 
 @lru_cache
@@ -52,7 +75,8 @@ def call_gemini(call: Callable[[], T]) -> T:
       run out.
     - A call that times out becomes ModelTimeoutError straight away, since a
       retry would double an already long wait.
-    Other errors pass through."""
+    Other errors pass through. A retry that wouldn't fit the retry window
+    gives up at once, as if the retries had run out."""
     for attempt in range(1, _MAX_OVERLOAD_ATTEMPTS + 1):
         try:
             return call()
@@ -63,9 +87,10 @@ def call_gemini(call: Callable[[], T]) -> T:
         except ServerError as exc:
             if exc.code != 503:
                 raise
-            if attempt == _MAX_OVERLOAD_ATTEMPTS:
+            delay = 2 ** (attempt - 1)
+            if attempt == _MAX_OVERLOAD_ATTEMPTS or not fits_retry_window(delay):
                 raise ModelOverloadedError(str(exc)) from exc
-            time.sleep(2 ** (attempt - 1))
+            time.sleep(delay)
     raise AssertionError("unreachable")
 
 

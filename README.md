@@ -257,8 +257,15 @@ even with quota to spare. Those are retried after 1s, 2s and 4s; if the model
 is still overloaded, `/chat` returns a 503 saying it's a temporary Google-side
 issue (`Retry-After: 60`) instead of a bare 500. A Gemini call that gets no
 response within `GEMINI_TIMEOUT_S` (60s) is stopped rather than left hanging,
-and `/chat` returns a 504 saying so. The MCP proxy waits up to 240s, enough
-for the three Gemini calls a `/chat` can make.
+and `/chat` returns a 504 saying so. Retries only happen in a `/chat`'s
+first 45s: a retry whose wait would end later isn't made, and the 429 or
+503 above comes back straight away. Without that limit, Gemini's suggested
+waits (up to ~60s each) added up across the nested retries: four
+per-minute 429s in a row could keep a `/chat` going for 7 minutes, long
+after the MCP proxy had given up on it. Now a `/chat` ends within 45s plus
+60s for each of its three Gemini calls (route, embed, generate), 225s in
+all, inside the MCP proxy's 240s. The eval harness calls the agent
+directly, so it keeps retrying as before.
 
 **Limits:** the quota is shared by everyone using the demo, so each visitor
 (an IP address; for IPv6, its /64) can ask 6 questions a minute and 30 a

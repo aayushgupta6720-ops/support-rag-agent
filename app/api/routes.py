@@ -14,11 +14,18 @@ from app.core.gemini_client import (
     ModelTimeoutError,
     RateLimitedError,
     next_daily_quota_reset,
+    start_retry_window,
 )
 from app.core.observability import log_event, start_trace
 from app.models.schemas import ChatRequest, ChatResponse, HealthResponse
 
 router = APIRouter()
+
+# How long into a /chat its Gemini calls may still retry 429s and 503s.
+# After it, the next failure is returned as it comes, so a /chat ends within
+# this plus its three calls' gemini_timeout_s: 45 + 3 x 60 = 225s, inside
+# the MCP proxy's 240s with room for Qdrant. Change both together.
+_RETRY_WINDOW_S = 45.0
 
 
 def _in_about(seconds: float) -> str:
@@ -90,6 +97,7 @@ async def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
     """
     start = time.perf_counter()
     trace = start_trace()
+    start_retry_window(_RETRY_WINDOW_S)
 
     try:
         result = await run_agent(request.query)

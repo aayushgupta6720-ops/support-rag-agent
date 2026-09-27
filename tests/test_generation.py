@@ -1,9 +1,17 @@
+import contextvars
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 from google.genai.errors import ClientError, ServerError
 
+import app.api.routes as routes
+import app.core.gemini_client as gemini_client
 import app.core.generation as generation
+import app.rag.embeddings as embeddings
+import app.rag.retrieval as retrieval
+from app.agent.graph import AgentAnswer
+from app.agent.tools import SEARCH_DOCS_TOOL_NAME
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
     ModelOverloadedError,
@@ -12,7 +20,8 @@ from app.core.gemini_client import (
     is_daily_quota_error,
     next_daily_quota_reset,
 )
-from tests.fakes import DAILY, PER_MINUTE, rate_limited_error
+from app.main import app
+from tests.fakes import DAILY, PER_MINUTE, model_response, rate_limited_error
 
 
 class FakeModels:
@@ -176,3 +185,97 @@ def test_gemini_client_is_built_with_the_configured_timeout(monkeypatch):
         assert client._api_client._http_options.timeout == 12_500  # milliseconds
     finally:
         gemini_client.get_gemini_client.cache_clear()
+
+
+# ---- a whole /chat vs the MCP proxy's timeout --------------------------------------------
+
+_MCP_PROXY_TIMEOUT_S = 240  # mcp_server/server.py
+
+
+class _FakeClock:
+    """Stands in for the `time` module in the retry loops: sleeps and fake
+    Gemini requests move `now` on instead of waiting."""
+
+    def __init__(self):
+        self.now = 0.0
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    clock = _FakeClock()
+    monkeypatch.setattr(gemini_client, "time", clock)
+    monkeypatch.setattr(generation, "time", clock)
+    return clock
+
+
+def test_inside_a_retry_window_a_429_is_retried_only_while_the_wait_fits(monkeypatch, clock):
+    models = FakeModels([rate_limited_error("7s"), rate_limited_error("7s"), "never reached"])
+    monkeypatch.setattr(generation, "get_gemini_client", lambda: SimpleNamespace(models=models))
+
+    def chat():
+        gemini_client.start_retry_window(10)
+        _call()
+
+    # the first 7s wait fits in 10s; a second one would end at 14s
+    with pytest.raises(RateLimitedError):
+        contextvars.copy_context().run(chat)  # a context of its own, as each request gets
+    assert (models.calls, clock.now) == (2, 7)
+
+
+def _gemini_method(clock, outcomes):
+    """Returns (seconds, result or exception) outcomes in order, moving the
+    clock on by each one's seconds."""
+    outcomes = list(outcomes)
+
+    def method(**kwargs):
+        seconds, outcome = outcomes.pop(0)
+        clock.now += seconds
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    return method
+
+
+async def _no_chunks(vector, top_k):
+    return []
+
+
+# Errors come back fast; answers as slowly as the 60s timeout allows.
+_429 = (1, rate_limited_error("59s", quota_id=PER_MINUTE))
+_503 = (1, _overloaded())
+_ROUTED = (60, model_response(function_call=(SEARCH_DOCS_TOOL_NAME, {"query": "q"})))
+_EMBEDDED = (60, SimpleNamespace(embeddings=[SimpleNamespace(values=[0.0])], metadata=None))
+_ANSWERED = (60, model_response(parsed=AgentAnswer(answer="ok")))
+
+
+@pytest.mark.parametrize(
+    ("generate", "embed", "status"),
+    [
+        # sustained per-minute 429s on the route call, each suggesting a 59s wait
+        pytest.param([_429] * 4 + [_ROUTED, _ANSWERED], [_EMBEDDED], 429, id="per-minute-429s"),
+        # the loops nest: each 429 retry starts another round of 503 backoff
+        pytest.param(([_503] * 3 + [_429]) * 4 + [_503] * 3 + [_ROUTED, _ANSWERED], [_EMBEDDED], 429,
+                     id="503s-then-429s"),
+        # the slowest answer that still gets through: a retry just inside the window, then three 60s calls
+        pytest.param([(44, _overloaded()), _ROUTED, _ANSWERED], [_EMBEDDED], 200, id="slow-but-answered"),
+    ],
+)
+def test_a_chat_is_over_before_the_mcp_proxy_gives_up(monkeypatch, clock, generate, embed, status):
+    models = SimpleNamespace(generate_content=_gemini_method(clock, generate), embed_content=_gemini_method(clock, embed))
+    monkeypatch.setattr(generation, "get_gemini_client", lambda: SimpleNamespace(models=models))
+    monkeypatch.setattr(embeddings, "get_gemini_client", lambda: SimpleNamespace(models=models))
+    monkeypatch.setattr(retrieval, "search", _no_chunks)
+    monkeypatch.setattr(routes, "log_event", lambda **fields: None)
+
+    response = TestClient(app).post("/chat", json={"query": "refund?"})
+
+    # answered or refused, the MCP proxy is still waiting to pass it on
+    assert clock.now <= _MCP_PROXY_TIMEOUT_S
+    assert response.status_code == status
