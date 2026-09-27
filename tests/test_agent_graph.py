@@ -59,9 +59,11 @@ async def test_tool_call_routes_through_retrieval(monkeypatch, retrieve_calls):
     assert generation["response_schema"] is graph.AgentAnswer
 
 
-async def test_tool_call_without_query_arg_falls_back_to_user_query(monkeypatch, retrieve_calls):
+# None: how the SDK parses a functionCall that comes without an "args" field
+@pytest.mark.parametrize("args", [{}, None])
+async def test_tool_call_without_query_arg_falls_back_to_user_query(monkeypatch, retrieve_calls, args):
     monkeypatch.setattr(graph, "generate", FakeGenerate([
-        model_response(function_call=(SEARCH_DOCS_TOOL_NAME, {})),
+        model_response(function_call=(SEARCH_DOCS_TOOL_NAME, args)),
         _answer("..."),
     ]))
 

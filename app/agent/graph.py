@@ -71,7 +71,8 @@ def _route_decision(state: AgentState) -> str:
 async def _retrieve_node(state: AgentState) -> dict:
     parts = state["router_content"].parts or []
     call = next(part.function_call for part in parts if part.function_call)
-    search_query = call.args.get("query") or state["query"]
+    # args is None, not {}, when the call came without any
+    search_query = (call.args or {}).get("query") or state["query"]
     chunks = await retrieve(search_query)
     return {"chunks": chunks}
 
