@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 import app.eval.harness as harness
@@ -57,6 +59,26 @@ def test_category_shapes():
             assert len(case.expected_doc_ids) >= 2, case.id
         if case.category in {"unanswerable", "out_of_scope", "direct"}:
             assert case.expected_doc_ids == [], case.id
+
+
+# Each unanswerable case stays unanswerable only while no doc covers it; a
+# pattern here catches a new doc that quietly answers one.
+_UNANSWERABLE_PATTERNS = {
+    "unanswerable_dark_mode": r"dark mode|\btheme",
+    "unanswerable_pricing": r"[$€£]\s?\d|\bprice[sd]?\b|\bcosts? \d",
+    "unanswerable_sso": r"\bsso\b|saml|single sign-on",
+    "unanswerable_phone_support": r"phone (number|support)|\bcall us\b|\+\d",
+    "unanswerable_team_seats": r"\bseats?\b|up to \d+ (members|users|people)|\d+ (members|users) (per|max)",
+    "unanswerable_upload_size": r"\b\d+\s?(kb|mb|gb)\b|file size|upload limit",
+}
+
+
+def test_no_doc_answers_an_unanswerable_case():
+    unanswerable = {c.id for c in load_golden_set() if c.category == "unanswerable"}
+    assert set(_UNANSWERABLE_PATTERNS) == unanswerable
+    for doc in load_documents():
+        for case_id, pattern in _UNANSWERABLE_PATTERNS.items():
+            assert not re.search(pattern, f"{doc.title}\n{doc.text}", re.IGNORECASE), (doc.doc_id, case_id)
 
 
 # --- harness scoring
