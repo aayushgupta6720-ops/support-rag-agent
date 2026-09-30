@@ -32,7 +32,7 @@ def test_health(client):
 
 
 def test_chat_returns_answer_and_logs_one_structured_event(client, logged, monkeypatch):
-    async def fake_run_agent(query):
+    async def fake_run_agent(query, history=None):
         with time_step("generate") as usage:
             usage.update(input_tokens=30, output_tokens=5, cost_usd=0.001)
         return {
@@ -67,7 +67,7 @@ def test_chat_lists_each_source_doc_once(client, logged, monkeypatch):
     # sources come one per retrieved chunk, and a doc often has two of the top 4
     per_chunk = ["password-reset", "two-factor-auth", "two-factor-auth", "billing-refunds"]
 
-    async def fake_run_agent(query):
+    async def fake_run_agent(query, history=None):
         return {"answer": "...", "sources": per_chunk, "chunks": [chunk(doc_id) for doc_id in per_chunk]}
 
     monkeypatch.setattr(routes, "run_agent", fake_run_agent)
@@ -85,7 +85,7 @@ def test_chat_rejects_empty_query(client, logged):
 
 
 def test_chat_failure_is_logged_with_error_then_returns_500(client, logged, monkeypatch):
-    async def failing_agent(query):
+    async def failing_agent(query, history=None):
         raise RuntimeError("gemini exploded")
 
     monkeypatch.setattr(routes, "run_agent", failing_agent)
@@ -98,7 +98,7 @@ def test_chat_failure_is_logged_with_error_then_returns_500(client, logged, monk
 
 
 def test_daily_quota_returns_503_with_a_clear_message(client, logged, monkeypatch):
-    async def quota_exhausted(query):
+    async def quota_exhausted(query, history=None):
         raise DailyQuotaExhaustedError("429 RESOURCE_EXHAUSTED")
 
     monkeypatch.setattr(routes, "run_agent", quota_exhausted)
@@ -117,7 +117,7 @@ def test_daily_quota_returns_503_with_a_clear_message(client, logged, monkeypatc
 
 
 def test_per_minute_quota_past_the_retries_returns_429_not_500(client, logged, monkeypatch):
-    async def rate_limited(query):
+    async def rate_limited(query, history=None):
         raise RateLimitedError("429 RESOURCE_EXHAUSTED")
 
     monkeypatch.setattr(routes, "run_agent", rate_limited)
@@ -130,7 +130,7 @@ def test_per_minute_quota_past_the_retries_returns_429_not_500(client, logged, m
 
 
 def test_overloaded_model_returns_503_saying_it_is_temporary(client, logged, monkeypatch):
-    async def overloaded(query):
+    async def overloaded(query, history=None):
         raise ModelOverloadedError("503 UNAVAILABLE. {'error': {...}}")
 
     monkeypatch.setattr(routes, "run_agent", overloaded)
@@ -146,7 +146,7 @@ def test_overloaded_model_returns_503_saying_it_is_temporary(client, logged, mon
 
 
 def test_gemini_timeout_returns_504_saying_it_was_stopped(client, logged, monkeypatch):
-    async def timed_out(query):
+    async def timed_out(query, history=None):
         raise ModelTimeoutError("no response from Gemini within 60s")
 
     monkeypatch.setattr(routes, "run_agent", timed_out)

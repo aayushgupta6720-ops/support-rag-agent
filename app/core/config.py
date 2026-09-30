@@ -31,6 +31,16 @@ class Settings(BaseSettings):
     # nothing sits in front. Never X-Forwarded-For: visitors can forge it.
     client_ip_header: str | None = None
 
+    # Shared store (Redis, e.g. a Render Key Value URL) for the rate-limit
+    # counts and chat history. Unset keeps both in the process: fine locally,
+    # but they're lost on every restart, which on Render's free plan means
+    # every time the service wakes up after sleeping.
+    redis_url: str = ""
+    # Multi-turn chat: how many earlier question-and-answer exchanges a
+    # session keeps, and how long an idle session lasts.
+    session_max_exchanges: int = 3
+    session_ttl_s: int = 1800
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

@@ -2,6 +2,7 @@
 
 import asyncio
 
+import fakeredis
 import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
@@ -9,7 +10,7 @@ from starlette.requests import Request
 import app.api.ratelimit as ratelimit
 import app.api.routes as routes
 from app.api.body_limit import BodySizeLimit
-from app.api.ratelimit import Limit, RateLimiter, build_rate_limiters, client_key
+from app.api.ratelimit import Limit, RateLimiter, RedisRateLimiter, build_rate_limiters, client_key
 from app.core.config import get_settings
 from app.main import app
 
@@ -18,7 +19,7 @@ from app.main import app
 def agent_calls(monkeypatch):
     calls: list[str] = []
 
-    async def fake_run_agent(query):
+    async def fake_run_agent(query, history=None):
         calls.append(query)
         return {"answer": "ok", "sources": []}
 
@@ -62,25 +63,12 @@ def test_forged_forwarded_headers_do_not_reset_the_count_and_others_are_unaffect
     assert _ask(client, "203.0.113.9").status_code == 200
 
 
-def test_the_count_is_kept_on_the_event_loop_where_requests_cannot_interleave(agent_calls, behind_render, monkeypatch):
-    # RateLimiter.hit has no lock. Run in FastAPI's threadpool, as a sync
-    # dependency is, requests arriving together interleaved inside it: some got
-    # past the limit, others a 500 from "deque mutated during iteration".
-    limiter = app.state.rate_limiters["chat"]
-    real_hit, on_event_loop = limiter.hit, []
-
-    def hit(key):
-        try:
-            asyncio.get_running_loop()
-            on_event_loop.append(True)
-        except RuntimeError:  # no event loop in this thread
-            on_event_loop.append(False)
-        return real_hit(key)
-
-    monkeypatch.setattr(limiter, "hit", hit)
-
-    assert _ask(TestClient(app), "198.51.100.4").status_code == 200
-    assert on_event_loop == [True]
+def test_a_visitor_over_the_limit_is_refused_when_counts_are_in_redis(agent_calls, behind_render, monkeypatch):
+    redis = fakeredis.FakeAsyncRedis(server=fakeredis.FakeServer())
+    monkeypatch.setattr(app.state, "rate_limiters", build_rate_limiters(get_settings(), redis))
+    with TestClient(app) as client:  # one event loop for the fake Redis client
+        codes = [_ask(client, "198.51.100.4").status_code for _ in range(7)]
+    assert codes == [200] * 6 + [429] and len(agent_calls) == 6
 
 
 def _request(peer, **headers):
@@ -100,29 +88,88 @@ def test_a_missing_proxy_header_puts_everyone_in_one_count(monkeypatch):
     assert {client_key(_request(peer)) for peer in ("10.9.9.1", "10.9.9.2")} == {"missing CF-Connecting-IP"}
 
 
-def test_the_window_slides_and_refused_requests_do_not_count():
+# The in-process and Redis limiters must count the same way, so each rule
+# below runs against both.
+@pytest.fixture(params=["memory", "redis"])
+def make_limiter(request):
+    server = fakeredis.FakeServer()
+
+    def make(limits, clock):
+        limiter = RateLimiter("questions", limits, clock=clock)
+        if request.param == "redis":
+            limiter = RedisRateLimiter(limiter, fakeredis.FakeAsyncRedis(server=server), clock=clock)
+        return limiter
+
+    return make
+
+
+async def test_the_window_slides_and_refused_requests_do_not_count(make_limiter):
     now = [1000.0]
-    limiter = RateLimiter("questions", [Limit(2, 60, "a minute")], clock=lambda: now[0])
-    assert limiter.hit("a") is None and limiter.hit("a") is None
+    limiter = make_limiter([Limit(2, 60, "a minute")], clock=lambda: now[0])
+    assert await limiter.hit("a") is None and await limiter.hit("a") is None
     for _ in range(10):
         now[0] += 5
-        assert limiter.hit("a") is not None
+        assert await limiter.hit("a") is not None
     now[0] += 10  # 60s after the first request
-    assert limiter.hit("a") is None
+    assert await limiter.hit("a") is None
 
 
-def test_when_both_limits_are_reached_the_refusal_gives_the_longer_wait():
+async def test_when_both_limits_are_reached_the_refusal_gives_the_longer_wait(make_limiter):
     now = [0.0]
-    limiter = RateLimiter("questions", [Limit(6, 60, "a minute"), Limit(30, 86400, "a day")], clock=lambda: now[0])
+    limiter = make_limiter([Limit(6, 60, "a minute"), Limit(30, 86400, "a day")], clock=lambda: now[0])
     for i in range(30):  # the day's 30, the last 6 inside one minute
         now[0] = i * 600.0 if i < 24 else 20000.0 + i
-        assert limiter.hit("a") is None
+        assert await limiter.hit("a") is None
 
     now[0] = 20060.0
-    limit, wait = limiter.hit("a")
+    limit, wait = await limiter.hit("a")
 
     # not "try again in a few seconds" only to be refused again for the day
-    assert limit.per == "a day" and wait == 86400 - now[0]
+    assert limit.per == "a day" and wait == pytest.approx(86400 - now[0])
+
+
+async def test_visitors_are_counted_separately(make_limiter):
+    limiter = make_limiter([Limit(1, 60, "a minute")], clock=lambda: 5000.0)
+    assert await limiter.hit("a") is None and await limiter.hit("b") is None
+    assert await limiter.hit("a") is not None
+
+
+async def test_requests_arriving_together_cannot_get_past_the_limit(make_limiter):
+    # Before the check ran on the event loop, requests arriving together
+    # interleaved inside it: some got past the limit, others a 500.
+    limiter = make_limiter([Limit(6, 60, "a minute")], clock=lambda: 5000.0)
+    refusals = await asyncio.gather(*(limiter.hit("a") for _ in range(40)))
+    assert sum(refused is None for refused in refusals) == 6
+
+
+async def test_counts_in_redis_survive_a_restart():
+    # On Render's free plan the service restarts every time it wakes from
+    # sleep, which used to hand every visitor a fresh allowance.
+    server, now = fakeredis.FakeServer(), [5000.0]
+
+    def start():
+        return RedisRateLimiter(RateLimiter("questions", [Limit(6, 60, "a minute")]),
+                                fakeredis.FakeAsyncRedis(server=server), clock=lambda: now[0])
+
+    before = start()
+    for _ in range(6):
+        assert await before.hit("a") is None
+    after = start()
+    assert await after.hit("a") is not None
+
+
+async def test_while_redis_is_down_the_process_counts_instead(monkeypatch):
+    events = []
+    monkeypatch.setattr(ratelimit, "log_event", lambda **fields: events.append(fields))
+    server = fakeredis.FakeServer()
+    server.connected = False
+    limiter = RedisRateLimiter(RateLimiter("questions", [Limit(6, 60, "a minute")]), fakeredis.FakeAsyncRedis(server=server))
+
+    refusals = [await limiter.hit("a") for _ in range(7)]
+
+    # still limited, not refusing everyone or letting everyone through
+    assert [refused is None for refused in refusals] == [True] * 6 + [False]
+    assert [e["event"] for e in events] == ["redis_unavailable"]  # logged once, not per request
 
 
 # ---- query length ------------------------------------------------------------------------

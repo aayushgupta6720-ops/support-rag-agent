@@ -5,6 +5,7 @@ import app.main
 import app.rag.embeddings
 import app.rag.qdrant_store
 from app.api.ratelimit import build_rate_limiters
+from app.api.sessions import build_session_store
 from app.core.config import get_settings
 
 
@@ -19,9 +20,13 @@ def block_external_services(monkeypatch):
     monkeypatch.setattr(app.core.generation, "get_gemini_client", _no_network)
     monkeypatch.setattr(app.rag.embeddings, "get_gemini_client", _no_network)
     monkeypatch.setattr(app.rag.qdrant_store, "get_client", _no_network)
+    # A REDIS_URL in a local .env must not point tests at a real Redis; tests
+    # that need one pass a fakeredis client in.
+    monkeypatch.setattr(get_settings(), "redis_url", "")
 
 
 @pytest.fixture(autouse=True)
-def fresh_rate_limits(monkeypatch):
-    """Each test starts with no requests counted, as after a restart."""
+def fresh_app_state(monkeypatch):
+    """Each test starts with no requests counted and no chat history."""
     monkeypatch.setattr(app.main.app.state, "rate_limiters", build_rate_limiters(get_settings()))
+    monkeypatch.setattr(app.main.app.state, "sessions", build_session_store(get_settings()))

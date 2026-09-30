@@ -1,6 +1,7 @@
 import pytest
 
 import app.agent.graph as graph
+from app.agent.history import Turn
 from app.agent.prompts import (
     DIRECT_ANSWER_PROMPT_VERSION,
     DIRECT_ANSWER_SYSTEM_PROMPT,
@@ -117,3 +118,31 @@ async def test_trace_records_tokens_and_cost_per_llm_step(monkeypatch, retrieve_
     assert (route.input_tokens, route.output_tokens) == (100, 20)
     assert route.cost_usd == generation_cost_usd(get_settings().generation_model, 100, 20)
     assert trace.total_tokens == 180
+
+
+async def test_earlier_turns_go_before_the_latest_message_in_both_calls(monkeypatch, retrieve_calls):
+    fake = FakeGenerate([
+        model_response(function_call=(SEARCH_DOCS_TOOL_NAME, {"query": "refund policy for annual plans"})),
+        _answer("Within 14 days."),
+    ])
+    monkeypatch.setattr(graph, "generate", fake)
+    history = [Turn("user", "Can I get a refund on a monthly plan?"), Turn("model", "Within 7 days.")]
+
+    await graph.run_agent("What about annual plans?", history=history)
+
+    for call in fake.calls:  # the router and the answer both see the conversation
+        assert [(c.role, c.parts[0].text) for c in call["history"]] == [
+            ("user", "Can I get a refund on a monthly plan?"), ("model", "Within 7 days."),
+        ]
+    # the search sees no history, so it gets the router's standalone query
+    assert retrieve_calls.queries == ["refund policy for annual plans"]
+    assert fake.calls[1]["prompt"].endswith("Question: What about annual plans?")
+
+
+async def test_a_single_question_sends_no_history(monkeypatch, retrieve_calls):
+    fake = FakeGenerate([model_response(), _answer("Hi!")])
+    monkeypatch.setattr(graph, "generate", fake)
+
+    await graph.run_agent("hello")
+
+    assert [call["history"] for call in fake.calls] == [[], []]

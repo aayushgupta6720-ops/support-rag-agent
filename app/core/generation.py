@@ -73,10 +73,13 @@ async def generate(
     system_instruction: str,
     tools: list[types.Tool] | None = None,
     response_schema: type[BaseModel] | None = None,
+    history: list[types.Content] | None = None,
 ) -> types.GenerateContentResponse:
+    """`prompt` is the latest user message; `history` holds the conversation's
+    earlier turns, oldest first."""
     return await asyncio.to_thread(
         _generate_sync,
-        contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+        contents=[*(history or []), types.Content(role="user", parts=[types.Part(text=prompt)])],
         system_instruction=system_instruction,
         tools=tools,
         response_schema=response_schema,

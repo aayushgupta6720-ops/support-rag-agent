@@ -37,7 +37,9 @@ def _error_detail(exc: urllib.error.HTTPError) -> str:
 
 @mcp.tool()
 def ask_support_agent(query: str, session_id: str | None = None) -> str:
-    """Ask the support agent a question and get a grounded answer with sources."""
+    """Ask the support agent a question and get a grounded answer with sources.
+    To ask a follow-up in the same conversation, pass the session_id that
+    came with the previous answer."""
     payload = json.dumps({"query": query, "session_id": session_id}).encode("utf-8")
     request = urllib.request.Request(
         f"{SUPPORT_AGENT_URL}/chat",
@@ -62,11 +64,13 @@ def ask_support_agent(query: str, session_id: str | None = None) -> str:
         reason = getattr(exc, "reason", exc)
         raise ToolError(f"Couldn't get an answer from the support agent at {SUPPORT_AGENT_URL} ({reason}).") from exc
 
-    answer = body["answer"]
+    reply = body["answer"]
     sources = body.get("sources", [])
     if sources:
-        return f"{answer}\n\nSources: {', '.join(sources)}"
-    return answer
+        reply += f"\n\nSources: {', '.join(sources)}"
+    if body.get("session_id"):
+        reply += f"\n\nsession_id: {body['session_id']}"
+    return reply
 
 
 if __name__ == "__main__":

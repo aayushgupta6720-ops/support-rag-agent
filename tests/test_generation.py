@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from google.genai import types
 from google.genai.errors import ClientError, ServerError
 
 import app.api.routes as routes
@@ -279,3 +280,23 @@ def test_a_chat_is_over_before_the_mcp_proxy_gives_up(monkeypatch, clock, genera
     # answered or refused, the MCP proxy is still waiting to pass it on
     assert clock.now <= _MCP_PROXY_TIMEOUT_S
     assert response.status_code == status
+
+
+async def test_earlier_turns_are_sent_before_the_latest_message(monkeypatch):
+    sent = {}
+
+    def fake_generate_sync(**kwargs):
+        sent.update(kwargs)
+        return "response"
+
+    monkeypatch.setattr(generation, "_generate_sync", fake_generate_sync)
+    history = [
+        types.Content(role="user", parts=[types.Part(text="earlier question")]),
+        types.Content(role="model", parts=[types.Part(text="earlier answer")]),
+    ]
+
+    await generation.generate(prompt="latest", system_instruction="sys", history=history)
+
+    assert [(c.role, c.parts[0].text) for c in sent["contents"]] == [
+        ("user", "earlier question"), ("model", "earlier answer"), ("user", "latest"),
+    ]

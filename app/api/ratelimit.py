@@ -2,18 +2,22 @@
 the shared daily Gemini quota for everyone. A visitor is an IP address (for
 IPv6, its /64, since one visitor usually holds all 2^64 of those).
 
-Counts live in memory: right for a single instance (Render's free plan runs
-one), and they reset on restart. Several instances would need a shared
-store such as Redis."""
+With REDIS_URL set, counts live in Redis, so they survive restarts (on
+Render's free plan, the service restarts every time it wakes from sleep) and
+would be shared by several instances. Without it, or while Redis is
+unreachable, they live in the process."""
 
 import ipaddress
 import math
+import secrets
 import time
 from collections import OrderedDict, deque
 from dataclasses import dataclass
 from typing import Callable
 
 from fastapi import Depends, HTTPException, Request
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from app.core.config import Settings, get_settings
 from app.core.observability import log_event
@@ -45,10 +49,12 @@ class RateLimiter:
         self._clock = clock
         self._hits: OrderedDict[str, deque[float]] = OrderedDict()
 
-    def hit(self, key: str) -> tuple[Limit, float] | None:
+    async def hit(self, key: str) -> tuple[Limit, float] | None:
         """Count a request from `key`. If a limit is already reached, count
         nothing and return that limit and the seconds until it allows another
-        request: the longest wait, when more than one is reached."""
+        request: the longest wait, when more than one is reached. Async only
+        to match RedisRateLimiter: it never awaits, so concurrent requests
+        can't interleave inside it."""
         if not self.limits:
             return None
         now = self._clock()
@@ -72,15 +78,81 @@ class RateLimiter:
         return None
 
 
-def build_rate_limiters(settings: Settings) -> dict[str, RateLimiter]:
+# The same sliding window as RateLimiter.hit, run inside Redis so the check
+# and the count are one atomic step. KEYS[1] is the visitor's sorted set of
+# request times; ARGV is now, a unique member for this request, then count
+# and window for each limit. Returns {index of the refusing limit (1-based,
+# 0 if none), wait in seconds}. The wait is a string because Redis truncates
+# Lua numbers to integers.
+_SLIDING_WINDOW = """
+local now = tonumber(ARGV[1])
+local longest = 0
+for i = 3, #ARGV, 2 do
+  longest = math.max(longest, tonumber(ARGV[i + 1]))
+end
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now - longest)
+local refused, wait = 0, 0
+for i = 3, #ARGV, 2 do
+  local count, window = tonumber(ARGV[i]), tonumber(ARGV[i + 1])
+  if redis.call('ZCOUNT', KEYS[1], '(' .. (now - window), '+inf') >= count then
+    local nth = redis.call('ZREVRANGE', KEYS[1], count - 1, count - 1, 'WITHSCORES')
+    local this_wait = tonumber(nth[2]) + window - now
+    if refused == 0 or this_wait > wait then
+      refused, wait = (i - 1) / 2, this_wait
+    end
+  end
+end
+if refused > 0 then
+  return {refused, tostring(wait)}
+end
+redis.call('ZADD', KEYS[1], now, ARGV[2])
+redis.call('EXPIRE', KEYS[1], math.ceil(longest))
+return {0, '0'}
+"""
+
+
+class RedisRateLimiter:
+    """RateLimiter's limits, counted in Redis. If Redis fails, requests are
+    counted by the in-process `fallback` instead: still limited, just not
+    shared, rather than either refusing everyone or letting everyone through."""
+
+    def __init__(self, fallback: RateLimiter, redis: Redis, clock: Callable[[], float] = time.time) -> None:
+        self.what = fallback.what
+        self.limits = fallback.limits
+        self._fallback = fallback
+        self._script = redis.register_script(_SLIDING_WINDOW)
+        # Wall-clock time, unlike RateLimiter: the counts outlive the process.
+        self._clock = clock
+        self._redis_ok = True
+
+    async def hit(self, key: str) -> tuple[Limit, float] | None:
+        if not self.limits:
+            return None
+        now = self._clock()
+        args = [now, f"{now}:{secrets.token_hex(4)}"]
+        for limit in self.limits:
+            args += [limit.count, limit.window_s]
+        try:
+            refused, wait = await self._script(keys=[f"ratelimit:{self.what}:{key}"], args=args)
+        except RedisError as exc:
+            if self._redis_ok:  # once per outage, not once per request
+                log_event(event="redis_unavailable", used_by="rate_limit", error=str(exc))
+            self._redis_ok = False
+            return await self._fallback.hit(key)
+        self._redis_ok = True
+        if int(refused) == 0:
+            return None
+        return self.limits[int(refused) - 1], float(wait)
+
+
+def build_rate_limiters(settings: Settings, redis: Redis | None = None) -> dict[str, RateLimiter | RedisRateLimiter]:
     """One limiter per costly endpoint. A /chat call is up to three model
     calls: route, embed, generate."""
-    return {
-        "chat": RateLimiter("questions", [
-            Limit(settings.chat_limit_per_minute, 60, "a minute"),
-            Limit(settings.chat_limit_per_day, 24 * 3600, "a day"),
-        ]),
-    }
+    chat = RateLimiter("questions", [
+        Limit(settings.chat_limit_per_minute, 60, "a minute"),
+        Limit(settings.chat_limit_per_day, 24 * 3600, "a day"),
+    ])
+    return {"chat": RedisRateLimiter(chat, redis) if redis else chat}
 
 
 _warned_missing_header = False
@@ -127,15 +199,14 @@ def _duration(seconds: int) -> str:
 
 def rate_limit(name: str):
     """A route dependency that refuses the request with a 429 once this
-    visitor is over the `name` limits. Async, though it never awaits, so it
-    runs on the event loop one request at a time: FastAPI runs a sync
-    dependency in a threadpool, where requests arriving together interleaved
-    inside RateLimiter.hit and got past the limit."""
+    visitor is over the `name` limits. Async, so it runs on the event loop:
+    FastAPI runs a sync dependency in a threadpool, where requests arriving
+    together interleaved inside RateLimiter.hit and got past the limit."""
 
     async def check(request: Request) -> None:
-        limiter: RateLimiter = request.app.state.rate_limiters[name]
+        limiter: RateLimiter | RedisRateLimiter = request.app.state.rate_limiters[name]
         key = client_key(request)
-        refused = limiter.hit(key)
+        refused = await limiter.hit(key)
         if refused is None:
             return
         limit, retry_after_s = refused

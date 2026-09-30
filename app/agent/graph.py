@@ -5,6 +5,7 @@ from google.genai import types
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
 
+from app.agent.history import Turn, to_contents
 from app.agent.prompts import (
     DIRECT_ANSWER_PROMPT_VERSION,
     DIRECT_ANSWER_SYSTEM_PROMPT,
@@ -27,6 +28,7 @@ class AgentAnswer(BaseModel):
 
 class AgentState(TypedDict, total=False):
     query: str
+    history: list[Turn]  # earlier turns of the conversation, oldest first
     router_content: types.Content
     chunks: list[RetrievedChunk]
     answer: str
@@ -54,6 +56,7 @@ async def _route(state: AgentState) -> dict:
             prompt=state["query"],
             system_instruction=ROUTER_SYSTEM_PROMPT,
             tools=[SEARCH_DOCS_TOOL],
+            history=to_contents(state.get("history", [])),
         )
         _record_generation_usage(usage, response)
     return {
@@ -99,6 +102,7 @@ async def _generate(state: AgentState) -> dict:
             prompt=prompt,
             system_instruction=system_instruction,
             response_schema=AgentAnswer,
+            history=to_contents(state.get("history", [])),
         )
         _record_generation_usage(usage, response)
     parsed: AgentAnswer = response.parsed
@@ -130,5 +134,5 @@ def get_agent_graph():
     return _build_graph()
 
 
-async def run_agent(query: str) -> AgentState:
-    return await get_agent_graph().ainvoke({"query": query})
+async def run_agent(query: str, history: list[Turn] | None = None) -> AgentState:
+    return await get_agent_graph().ainvoke({"query": query, "history": history or []})

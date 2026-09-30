@@ -1,12 +1,13 @@
 import math
+import secrets
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.agent.graph import run_agent
-from app.api.ratelimit import rate_limit
+from app.api.ratelimit import client_key, rate_limit
 from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
@@ -85,26 +86,34 @@ async def health() -> HealthResponse:
 
 
 @router.post("/chat", response_model=ChatResponse, dependencies=[rate_limit("chat")])
-async def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
+async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JSONResponse:
     """
     Agentic chat endpoint.
 
     Runs the LangGraph agent: a router decides whether the query needs the
     support-docs retrieval tool or can be answered directly, then generation
     produces a structured, schema-validated answer grounded in whatever
-    context was retrieved. Emits one structured log line per call with
+    context was retrieved. The session's earlier exchanges go to both, so
+    follow-up questions work. Emits one structured log line per call with
     latency/cost/quality signal for observability.
     """
     start = time.perf_counter()
     trace = start_trace()
     start_retry_window(_RETRY_WINDOW_S)
 
+    # A new conversation gets an unguessable id to send back for follow-ups.
+    session_id = request.session_id or secrets.token_urlsafe(16)
+    session_key = f"{client_key(http_request)}|{session_id}"  # see app/api/sessions.py
+    sessions = http_request.app.state.sessions
+    history = await sessions.history(session_key)
+
     try:
-        result = await run_agent(request.query)
+        result = await run_agent(request.query, history=history)
     except Exception as exc:
         log_event(
             event="chat_call",
-            session_id=request.session_id,
+            session_id=session_id,
+            history_turns=len(history),
             query=request.query,
             error=str(exc),
             error_type=type(exc).__name__,
@@ -119,10 +128,12 @@ async def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
     answer = result["answer"]
     sources = result.get("sources", [])
     chunks = result.get("chunks") or []
+    await sessions.add_exchange(session_key, request.query, answer)
 
     log_event(
         event="chat_call",
-        session_id=request.session_id,
+        session_id=session_id,
+        history_turns=len(history),
         query=request.query,
         answer_length=len(answer),
         sources=sources,
@@ -143,4 +154,5 @@ async def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
         # was listed twice. The log line above keeps them per chunk.
         sources=list(dict.fromkeys(sources)),
         latency_ms=elapsed_ms,
+        session_id=session_id,
     )

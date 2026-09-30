@@ -16,10 +16,12 @@ latency/cost observability.
 app/
   main.py              FastAPI app instance, mounts the router
   api/routes.py        /health and /chat endpoints
-  api/ratelimit.py     Per-visitor /chat limits
+  api/ratelimit.py     Per-visitor /chat limits, counted in Redis (or in memory)
+  api/sessions.py      Multi-turn chat history per session, in Redis (or in memory)
   api/body_limit.py    Refuses oversized request bodies before they're read
   core/config.py       Settings, loaded from .env
   core/gemini_client.py Shared, cached google-genai client
+  core/redis_client.py Shared Redis client, when REDIS_URL is set
   models/schemas.py    Pydantic request/response models
   rag/
     chunking.py        Paragraph-packing text chunker with word-boundary overlap
@@ -42,10 +44,10 @@ app/
 scripts/
   ingest.py            CLI: loads data/docs/*.md and ingests into Qdrant
   eval.py              CLI: runs the eval harness, prints + saves a report
-data/docs/             Sample support docs used by the ingestion script
+data/docs/             11 sample support docs used by the ingestion script
 data/eval/             Golden set + timestamped eval run results
 mcp_server/            Optional MCP wrapper (separate venv, see below)
-tests/                 Offline unit tests (Gemini and Qdrant are faked)
+tests/                 Offline unit tests (Gemini, Qdrant and Redis are faked)
 Dockerfile
 requirements.txt
 requirements-dev.txt   requirements.txt + pytest
@@ -88,6 +90,18 @@ Then `POST /chat` with `{"query": "..."}`. A LangGraph agent routes the query:
 a router call decides whether to call the `search_support_docs` tool or
 answer directly (e.g. for greetings), then a generation call produces a
 structured, schema-validated answer grounded in whatever was retrieved.
+
+Conversations can have follow-ups. Every response includes a `session_id`;
+send it back with the next question and the agent sees the last 3
+exchanges, so "What about annual plans?" after a refund question gets
+annual-plan refund policy. The router rewrites a follow-up like that into a
+standalone search query, since the search itself sees no history. Only
+questions and answers are kept, not retrieved docs, and product facts in an
+answer still have to come from docs retrieved for that question, not from
+earlier answers. A session ends after 30 idle minutes
+(`SESSION_MAX_EXCHANGES`, `SESSION_TTL_S`), and it's tied to the visitor as
+well as the id: a client can pick its own `session_id`, and without that,
+anyone reusing an id could continue someone else's conversation.
 
 Run the eval harness (agent + LLM-as-judge over a golden set) with:
 
@@ -214,6 +228,15 @@ local `.env`. Note that Render currently asks for a card on file even for
 the free plan (an account-level anti-abuse check, not a charge) —
 happens on both the Blueprint and manual "New Web Service" paths.
 
+Rate-limit counts and chat sessions live in a Render Key Value instance
+(Valkey 8, free plan, same region, internal access only, `allkeys-lru`
+eviction since every key has a TTL anyway). Set `REDIS_URL` to its internal
+URL, `redis://<instance id>:6379`. The free plan keeps data in memory only,
+so a Key Value restart resets the counts, but web-service restarts, which
+happen far more often, no longer do. On startup the app logs
+`{"event": "state_store", "backend": "redis"}` (or `"memory"`), which is how
+to check it picked the URL up.
+
 **Google Cloud Run** (matches the existing Dockerfile directly):
 
 ```bash
@@ -272,9 +295,15 @@ directly, so it keeps retrying as before.
 day. Past that, `/chat` returns a 429 with `Retry-After` and a `detail`
 saying when to try again, without calling the model; the MCP tool passes
 that message on. Change the numbers with `CHAT_LIMIT_PER_MINUTE` and
-`CHAT_LIMIT_PER_DAY` (0 turns one off). Counts are in memory, which suits
-the free plan's single instance (the Dockerfile pins one worker process
-so they aren't split), and reset on restart. A `query` can be up
+`CHAT_LIMIT_PER_DAY` (0 turns one off). With `REDIS_URL` set, counts (and
+chat sessions) live in Redis. They survive restarts, which matters on
+Render's free plan because the service restarts every time it wakes from
+sleep: with counts in memory, each wake-up handed every visitor a fresh
+allowance. The check and the count run as one Lua script, so simultaneous
+requests can't slip past the limit. If Redis is unreachable, requests are
+counted in memory instead, still limited, rather than all refused or all
+let through. Without `REDIS_URL`, everything is in memory, and the
+Dockerfile pins one worker process so the counts aren't split. A `query` can be up
 to 2,000 characters and a request body up to 64 KB; a bigger body is
 refused with a 413 before it's read, since FastAPI otherwise reads and
 parses all of it first (a 52 MB body took the server from 134 to 419 MB).
@@ -306,7 +335,9 @@ from `127.0.0.1`.
 ## Optional: MCP wrapper
 
 `mcp_server/` exposes `/chat` as an MCP tool (`ask_support_agent`) so an MCP
-client (e.g. Claude Desktop) can call the agent directly. It's a thin HTTP
+client (e.g. Claude Desktop) can call the agent directly. Each answer ends with
+its `session_id`, which the model can pass back to ask a follow-up in the
+same conversation. It's a thin HTTP
 proxy to the running FastAPI app, not an in-process import — the `mcp`
 package needs a newer `starlette` than this project's pinned FastAPI
 supports, so it lives in its own venv:

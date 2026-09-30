@@ -13,7 +13,10 @@ class ChatRequest(BaseModel):
     # pasted error message.
     query: str = Field(..., min_length=1, max_length=2000, description="User's question for the agent.")
     session_id: str | None = Field(
-        default=None, max_length=64, description="Optional session/thread id for multi-turn context."
+        default=None,
+        max_length=64,
+        description="The session_id from an earlier response, to ask a follow-up in that conversation. "
+        "Omit it to start a new one.",
     )
 
 
@@ -24,3 +27,4 @@ class ChatResponse(BaseModel):
         description="Ticket/doc IDs the answer was grounded in.",
     )
     latency_ms: float
+    session_id: str = Field(description="Send this back with the next question to continue the conversation.")
