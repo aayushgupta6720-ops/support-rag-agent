@@ -146,3 +146,34 @@ async def test_a_single_question_sends_no_history(monkeypatch, retrieve_calls):
     await graph.run_agent("hello")
 
     assert [call["history"] for call in fake.calls] == [[], []]
+
+
+async def test_the_search_query_is_recorded(monkeypatch, retrieve_calls):
+    monkeypatch.setattr(graph, "generate", FakeGenerate([
+        model_response(function_call=(SEARCH_DOCS_TOOL_NAME, {"query": "reset link expiry"})),
+        _answer("30 minutes."),
+    ]))
+
+    result = await graph.run_agent("how long is the reset link good for?")
+
+    assert result["search_query"] == "reset link expiry"
+
+
+async def test_route_and_retrieve_searches_without_generating_an_answer(monkeypatch, retrieve_calls):
+    fake = FakeGenerate([model_response(function_call=(SEARCH_DOCS_TOOL_NAME, {"query": "refund policy for annual plans"}))])
+    monkeypatch.setattr(graph, "generate", fake)
+
+    state = await graph.route_and_retrieve("What about annual plans?", history=[Turn("user", "Refund on monthly?")])
+
+    assert len(fake.calls) == 1 and fake.calls[0]["tools"]  # the router's call only
+    assert state["search_query"] == "refund policy for annual plans"
+    assert [c.doc_id for c in state["chunks"]] == ["password-reset", "two-factor-auth"]
+    assert "answer" not in state
+
+
+async def test_route_and_retrieve_stops_when_the_router_answers_directly(monkeypatch, retrieve_calls):
+    monkeypatch.setattr(graph, "generate", FakeGenerate([model_response()]))
+
+    state = await graph.route_and_retrieve("hello")
+
+    assert retrieve_calls.queries == [] and "chunks" not in state

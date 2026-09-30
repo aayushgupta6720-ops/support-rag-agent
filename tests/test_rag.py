@@ -50,6 +50,46 @@ async def test_retrieve_embeds_query_and_maps_points(monkeypatch):
     assert trace.steps[0].cost_usd == embedding_cost_usd(get_settings().embedding_model, 42)
 
 
+async def test_chunks_below_the_minimum_score_are_dropped_even_inside_the_top_k(monkeypatch):
+    async def fake_embed(text):
+        return _embed_response([0.1], billable_chars=5)
+
+    async def fake_search(vector, top_k):
+        return [_point("billing-refunds", 0.74), _point("invoices-and-receipts", 0.65), _point("api-keys", 0.61)]
+
+    monkeypatch.setattr(retrieval, "embed_query_response", fake_embed)
+    monkeypatch.setattr(retrieval, "search", fake_search)
+
+    assert [c.doc_id for c in await retrieval.retrieve("refund?")] == [
+        "billing-refunds", "invoices-and-receipts", "api-keys"]  # 0: off
+    monkeypatch.setattr(get_settings(), "retrieval_min_score", 0.65)
+    assert [c.doc_id for c in await retrieval.retrieve("refund?")] == ["billing-refunds", "invoices-and-receipts"]
+    assert [c.doc_id for c in await retrieval.retrieve("refund?", min_score=0.0)] == [
+        "billing-refunds", "invoices-and-receipts", "api-keys"]  # an explicit 0 overrides the setting
+
+
+async def test_chunks_too_far_below_the_best_one_are_dropped(monkeypatch):
+    # scores run higher for some queries than others, so the cut follows the best chunk
+    async def fake_embed(text):
+        return _embed_response([0.1], billable_chars=5)
+
+    points = {"high": [_point("team-members", 0.75), _point("account-deletion", 0.71), _point("api-keys", 0.64)],
+              "low": [_point("billing-refunds", 0.60), _point("invoices-and-receipts", 0.59), _point("api-keys", 0.50)]}
+
+    async def fake_search(vector, top_k):
+        return points[searched_for[-1]]
+
+    searched_for = []
+    monkeypatch.setattr(retrieval, "embed_query_response", fake_embed)
+    monkeypatch.setattr(retrieval, "search", fake_search)
+    monkeypatch.setattr(get_settings(), "retrieval_max_score_gap", 0.08)
+
+    searched_for.append("high")
+    assert [c.doc_id for c in await retrieval.retrieve("q")] == ["team-members", "account-deletion"]
+    searched_for.append("low")
+    assert [c.doc_id for c in await retrieval.retrieve("q")] == ["billing-refunds", "invoices-and-receipts"]
+
+
 async def test_retrieve_cost_falls_back_to_query_length_without_metadata(monkeypatch):
     async def fake_embed(text):
         return _embed_response([0.0], billable_chars=None)

@@ -29,6 +29,7 @@ class AgentAnswer(BaseModel):
 class AgentState(TypedDict, total=False):
     query: str
     history: list[Turn]  # earlier turns of the conversation, oldest first
+    search_query: str  # what was searched: the router's rewrite of the query
     router_content: types.Content
     chunks: list[RetrievedChunk]
     answer: str
@@ -77,7 +78,7 @@ async def _retrieve_node(state: AgentState) -> dict:
     # args is None, not {}, when the call came without any
     search_query = (call.args or {}).get("query") or state["query"]
     chunks = await retrieve(search_query)
-    return {"chunks": chunks}
+    return {"chunks": chunks, "search_query": search_query}
 
 
 async def _generate(state: AgentState) -> dict:
@@ -136,3 +137,14 @@ def get_agent_graph():
 
 async def run_agent(query: str, history: list[Turn] | None = None) -> AgentState:
     return await get_agent_graph().ainvoke({"query": query, "history": history or []})
+
+
+async def route_and_retrieve(query: str, history: list[Turn] | None = None) -> AgentState:
+    """The agent's first two steps, without generating an answer: what the
+    search saw and found. One model call instead of two, for measuring
+    retrieval on its own (scripts/threshold_sweep.py)."""
+    state: AgentState = {"query": query, "history": history or []}
+    state.update(await _route(state))
+    if _route_decision(state) == "retrieve":
+        state.update(await _retrieve_node(state))
+    return state

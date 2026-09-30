@@ -147,6 +147,20 @@ async def test_rank_and_precision_count_distinct_docs_in_retrieval_order(fake_ag
     assert result.context_precision == pytest.approx(1 / 3)
 
 
+async def test_a_case_records_the_search_query_and_each_chunks_score(fake_agent, monkeypatch):
+    async def run_agent(query, history=None):
+        return {"answer": "a", "sources": ["billing-refunds", "api-keys"], "search_query": "refund policy",
+                "chunks": [chunk("billing-refunds", score=0.74), chunk("api-keys", score=0.61)]}
+
+    monkeypatch.setattr(harness, "run_agent", run_agent)
+
+    result = await harness.run_case(_case(expected=("billing-refunds",)))
+
+    # enough to replay any score threshold later without calling the model
+    assert result.search_query == "refund policy"
+    assert result.retrieved == [("billing-refunds", 0.74), ("api-keys", 0.61)]
+
+
 async def test_mrr_hit_at_1_and_precision_over_the_cases_they_apply_to(fake_agent):
     results = []
     for id, sources in [("a", ["password-reset"]), ("b", ["api-keys", "password-reset"]), ("c", ["api-keys"])]:

@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     embedding_dim: int = 768
     generation_model: str = "gemini-flash-lite-latest"
     retrieval_top_k: int = 4
+    # Drop chunks inside the top k that are unlikely to be relevant, so fewer
+    # off-topic docs reach the answer (0 turns either off). min_score is a
+    # fixed cosine-similarity floor; max_score_gap drops chunks scoring more
+    # than this below the query's best chunk. Scores run higher for some
+    # queries than others, so the gap separates better: see
+    # scripts/threshold_sweep.py and the README.
+    retrieval_min_score: float = 0.0
+    retrieval_max_score_gap: float = 0.0
     chunk_max_chars: int = 800
     chunk_overlap_chars: int = 100
 

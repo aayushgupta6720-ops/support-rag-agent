@@ -45,6 +45,7 @@ app/
 scripts/
   ingest.py            CLI: loads data/docs/*.md and ingests into Qdrant
   eval.py              CLI: runs the eval harness, prints + saves a report
+  threshold_sweep.py   CLI: measures retrieval score thresholds offline from saved scores
 data/docs/             11 sample support docs used by the ingestion script
 data/eval/             Golden set + timestamped eval run results
 mcp_server/            Optional MCP wrapper (separate venv, see below)
@@ -196,9 +197,51 @@ this run can't say which one moved a number. Read it with that in mind:
   the top 4 every time, so the answers held. On the 5-doc corpus, the 63/65
   run scored MRR 1.00 and hit@1 100%.
 - Context precision was 34% before the new docs too: `top_k=4` pulls in
-  about two off-topic docs per question either way. Lowering `top_k` or
-  adding a similarity threshold (the `/chat` log records each chunk's score)
-  is the next retrieval change to measure.
+  about two off-topic docs per question either way. See "Score thresholds"
+  below for what cuts that.
+
+**Score thresholds.** Two ways to keep off-topic chunks out of the top 4
+are built in, both off by default: a fixed cosine-similarity floor
+(`RETRIEVAL_MIN_SCORE`), and a maximum gap below the query's best chunk
+(`RETRIEVAL_MAX_SCORE_GAP`). A threshold only removes chunks, so
+`python -m scripts.threshold_sweep --collect` runs just the router and the
+search for the 62 cases that search (62 model calls instead of ~190), saves
+every chunk's score, and then any threshold is scored offline with the eval's
+own metrics. `--changed` lists the cases a setting changes: only those can get
+different answers, so only those need an eval run.
+
+On the 62 cases, a fixed floor is a poor fit because scores depend on the
+query. Chunks from the right doc scored 0.597–0.796 and off-topic ones
+0.551–0.746; "How long does a refund take to show up?" scored 0.597 against
+the right doc, while other queries' off-topic chunks reached 0.746. The
+highest floor that loses nothing (0.597) lifts context precision only from
+34% to 45%, with no margin. 0.65, which looked right from two live queries,
+loses 5% of hits and leaves 3 cases with nothing. A gap works much better:
+
+| Gap | Hit rate | Recall | Context precision |
+|---|---|---|---|
+| off | 100% | 100% | 34% |
+| 0.10 | 100% | 100% | 61% |
+| 0.08 | 100% | 100% | 75% |
+| 0.06 | 100% | 99% | 83% |
+| 0.04 | 100% | 98% | 92% |
+
+Recall starts to drop at 0.06, when a two-doc answer's second doc scores
+more than that below the first. Adding a floor on top of a gap of 0.08 would
+cut the off-topic docs unanswerable questions still get from 3.0 to 1.2, but
+those already pass 6/6, and the floor would sit 0.017 from where it starts
+losing the right docs.
+
+The answer check reran the 49 cases a gap of 0.08 changes: 48/49, with 1.7
+docs per answer instead of 3.4 and context precision at 78%. The one failure,
+`multi_turn_false_premise_after_pushback`, answered "I don't have enough
+information to confirm that" before correctly giving the 14-day window,
+where the no-gap run said "No, 14 days". That opener is the grounded prompt's
+don't-guess fallback being reused to reject a false claim: in these 49 cases
+it appeared 3 times without the gap and 2 times with it, so it's a prompt
+weakness the gap didn't create, though one sample can't rule out that the
+single doc of context made it likelier. The live demo runs with
+`RETRIEVAL_MAX_SCORE_GAP=0.08`; the fallback wording is the next prompt fix.
 
 **Before that** (5 docs, 65 cases, `router_v2` + `direct_answer_v2`,
 `judge_v1`): 63/65 judge pass (97%), 100% retrieval recall.

@@ -23,6 +23,9 @@ def block_external_services(monkeypatch):
     # A REDIS_URL in a local .env must not point tests at a real Redis; tests
     # that need one pass a fakeredis client in.
     monkeypatch.setattr(get_settings(), "redis_url", "")
+    # Likewise a RETRIEVAL_MIN_SCORE there must not change what tests retrieve.
+    monkeypatch.setattr(get_settings(), "retrieval_min_score", 0.0)
+    monkeypatch.setattr(get_settings(), "retrieval_max_score_gap", 0.0)
 
 
 @pytest.fixture(autouse=True)

@@ -138,6 +138,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
         answer_length=len(answer),
         sources=sources,
         used_tool="chunks" in result,
+        search_query=result.get("search_query"),
         num_chunks_retrieved=len(chunks),
         retrieval_scores=[round(chunk.score, 4) for chunk in chunks],
         router_prompt_version=result.get("router_prompt_version"),

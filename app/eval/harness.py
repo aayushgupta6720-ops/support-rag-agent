@@ -8,6 +8,30 @@ from app.eval.judge import judge_answer
 
 
 @dataclass
+class RetrievalScores:
+    hit: bool
+    recall: float
+    reciprocal_rank: float
+    context_precision: float
+
+
+def score_retrieval(expected_doc_ids: list[str], sources: list[str]) -> RetrievalScores:
+    """Score what was retrieved (`sources`: one doc id per chunk, best first)
+    against the docs a case expects. Shared by the eval and the threshold
+    sweep, so both measure the same way."""
+    retrieved_docs = list(dict.fromkeys(sources))
+    found = [doc_id in retrieved_docs for doc_id in expected_doc_ids]
+    ranks = [retrieved_docs.index(doc_id) + 1 for doc_id in expected_doc_ids if doc_id in retrieved_docs]
+    relevant = sum(doc_id in expected_doc_ids for doc_id in retrieved_docs)
+    return RetrievalScores(
+        hit=any(found),
+        recall=sum(found) / len(found),
+        reciprocal_rank=1 / min(ranks) if ranks else 0.0,
+        context_precision=relevant / len(retrieved_docs) if retrieved_docs else 0.0,
+    )
+
+
+@dataclass
 class EvalCaseResult:
     case: EvalCase
     actual_answer: str
@@ -25,6 +49,11 @@ class EvalCaseResult:
     judge_correct: bool
     judge_reasoning: str
     judge_votes: list[bool]
+    # What the router searched for (None if it answered without searching)
+    # and each retrieved chunk's (doc id, similarity), best first: enough to
+    # replay a score threshold offline.
+    search_query: str | None = None
+    retrieved: list[tuple[str, float]] = field(default_factory=list)
 
 
 @dataclass
@@ -87,17 +116,7 @@ async def run_case(case: EvalCase) -> EvalCaseResult:
     result = await run_agent(case.query, history=history)
     actual_answer = result.get("answer", "")
     actual_sources = result.get("sources", [])  # one per chunk, best first
-    retrieved_docs = list(dict.fromkeys(actual_sources))
-
-    retrieval_hit = retrieval_recall = reciprocal_rank = context_precision = None
-    if case.expected_doc_ids:
-        found = [doc_id in retrieved_docs for doc_id in case.expected_doc_ids]
-        retrieval_hit = any(found)
-        retrieval_recall = sum(found) / len(found)
-        ranks = [retrieved_docs.index(doc_id) + 1 for doc_id in case.expected_doc_ids if doc_id in retrieved_docs]
-        reciprocal_rank = 1 / min(ranks) if ranks else 0.0
-        relevant = sum(doc_id in case.expected_doc_ids for doc_id in retrieved_docs)
-        context_precision = relevant / len(retrieved_docs) if retrieved_docs else 0.0
+    scores = score_retrieval(case.expected_doc_ids, actual_sources) if case.expected_doc_ids else None
 
     verdict = await judge_answer(
         case.query,
@@ -111,13 +130,15 @@ async def run_case(case: EvalCase) -> EvalCaseResult:
         case=case,
         actual_answer=actual_answer,
         actual_sources=actual_sources,
-        retrieval_hit=retrieval_hit,
-        retrieval_recall=retrieval_recall,
-        reciprocal_rank=reciprocal_rank,
-        context_precision=context_precision,
+        retrieval_hit=None if scores is None else scores.hit,
+        retrieval_recall=None if scores is None else scores.recall,
+        reciprocal_rank=None if scores is None else scores.reciprocal_rank,
+        context_precision=None if scores is None else scores.context_precision,
         judge_correct=verdict.correct,
         judge_reasoning=verdict.reasoning,
         judge_votes=verdict.votes,
+        search_query=result.get("search_query"),
+        retrieved=[(chunk.doc_id, chunk.score) for chunk in result.get("chunks") or []],
     )
 
 
