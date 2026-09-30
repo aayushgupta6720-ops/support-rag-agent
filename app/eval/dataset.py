@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 GOLDEN_SET_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "eval" / "golden_set.jsonl"
@@ -14,6 +14,7 @@ CATEGORIES = {
     "adversarial",  # prompt injection / social engineering
     "robustness",  # typos, other languages, vague phrasing
     "direct",  # greetings and small talk: no retrieval needed
+    "multi_turn",  # a follow-up that only makes sense with the earlier turns
 }
 
 
@@ -24,6 +25,9 @@ class EvalCase:
     category: str  # one of CATEGORIES
     expected_doc_ids: list[str]
     reference_answer: str
+    # Earlier turns, scripted rather than generated so every run asks the
+    # follow-up in the same conversation: [{"role": "user"|"model", "text": ...}]
+    history: list[dict] = field(default_factory=list)
 
 
 def load_golden_set(path: Path = GOLDEN_SET_PATH) -> list[EvalCase]:

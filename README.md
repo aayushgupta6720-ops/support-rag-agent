@@ -31,11 +31,12 @@ app/
     retrieval.py        Embed a query and fetch top-k chunks
   agent/
     graph.py           LangGraph agent: route -> (retrieve) -> generate
+    history.py         Earlier conversation turns, as Gemini contents
     prompts.py         Versioned system prompts
     tools.py           search_support_docs tool declaration
   eval/
     dataset.py         Loads data/eval/golden_set.jsonl
-    judge.py           LLM-as-judge: grades an answer against a reference
+    judge.py           LLM-as-judge: grades an answer against a reference, majority vote on failures
     harness.py         Runs the agent + judge over the golden set
     prompts.py         Versioned judge prompt
   core/
@@ -109,14 +110,46 @@ Run the eval harness (agent + LLM-as-judge over a golden set) with:
 python -m scripts.eval
 ```
 
-It reports a judge pass rate, retrieval hit rate (any expected doc
-retrieved), retrieval recall (all expected docs retrieved, which only differs
-for multi-doc questions), and a pass rate per category, then saves a
-timestamped JSON report under `data/eval/results/`. A case that raises (e.g.
-a Gemini 503 during a demand spike) is recorded as an error and left out of
-the rates instead of aborting the run.
+Pass case ids or categories to run only those, e.g. `python -m scripts.eval
+multi_turn greeting_1`.
 
-The golden set (`data/eval/golden_set.jsonl`) has 65 cases. Most of them test
+It reports a judge pass rate, a pass rate per category, and these retrieval
+metrics, computed over the cases that expect particular docs:
+
+- **Hit rate**: any expected doc was retrieved.
+- **Recall**: the share of expected docs retrieved. It only differs from the
+  hit rate for multi-doc questions.
+- **MRR** and **hit@1**: how high the first expected doc ranked among the
+  distinct docs retrieved. Hit rate alone can't tell first place from last.
+- **Context precision**: the share of retrieved docs that were expected, so
+  how much of what the answer was generated from was noise.
+
+It saves a timestamped JSON report under `data/eval/results/`, including
+which commit, prompt versions, model and `top_k` produced it. A case that
+raises (e.g. a Gemini 503 during a demand spike) is recorded as an error and
+left out of the rates instead of aborting the run.
+
+The corpus has 11 docs. Five hold the answers the golden set asks about.
+The other six (invoices, API keys, data export, email notifications,
+sign-in lockouts, team roles) share their vocabulary without holding those
+answers, so retrieval has to rank the right doc above near-misses.
+`top_k=4` now retrieves 4 of 14 chunks instead of 4 of 7, and a test fails
+if a doc ever answers one of the `unanswerable` cases.
+
+The judge grades each answer against a reference, sees the docs the agent
+retrieved (so it can tell a supported extra detail from an invented one),
+and sees the earlier turns in multi-turn cases. One verdict is noisy: the
+same answer text has been graded both ways on different runs. So a failing
+verdict is re-judged, up to three votes, and the majority kept, stopping as
+soon as two agree. Passing first verdicts aren't rechecked, to save quota.
+The flips seen so far were correct answers marked wrong, so the extra calls
+go where the noise was, but a wrong answer that fools the judge once still
+passes. Lowering the judge's temperature was the other option, but
+[Google recommends](https://ai.google.dev/gemini-api/docs/gemini-3) keeping
+Gemini 3 models at the default 1.0, warning that lower values can cause
+looping, so it wasn't used.
+
+The golden set (`data/eval/golden_set.jsonl`) has 73 cases. Most of them test
 failure modes, not whether the model can find the answer to an easy question:
 
 | Category | Cases | What it checks |
@@ -130,16 +163,47 @@ failure modes, not whether the model can find the answer to an easy question:
 | `adversarial` | 7 | Prompt injection and social engineering |
 | `robustness` | 3 | Typos, Spanish, vague phrasing |
 | `direct` | 6 | Greetings and small talk — no retrieval |
+| `multi_turn` | 8 | A follow-up that only makes sense with the earlier turns ("What about annual plans?"), a topic switch, and a false premise after pushback |
 
 Pass rates are per category because an aggregate hides the weak spots. With
 this few cases per category, treat a single run as a smoke signal, not a
 benchmark: one flipped case moves a category by 20+ points.
 
-**Latest run** (`gemini-flash-lite-latest`, 65 cases, `router_v2` +
-`direct_answer_v2`): 63/65 judge pass (97%), 100% retrieval recall, no
-errored cases.
+**Latest run** (`gemini-flash-lite-latest`, 73 cases, 11 docs, `router_v3`,
+`direct_answer_v3`, `grounded_answer_v3`, `judge_v2`): 73/73 judge pass,
+100% retrieval hit rate and recall, MRR 0.95, hit@1 91%, context precision
+34%, no errored cases. All 8 multi-turn cases pass, including the topic
+switch and the false premise after pushback.
 
-The previous prompts (`router_v1`, `direct_answer_v1`) scored 56/59 on the
+Three things changed at once (the prompts, the corpus, and the judge), so
+this run can't say which one moved a number. Read it with that in mind:
+
+- No first verdict failed, so the majority vote never ran. It didn't rescue
+  any case here.
+- `adversarial_injection_rate_limit` passed, but its answer still opens
+  with "I don't have enough information to confirm that" before giving the
+  real 1,000/min limit, the wording `judge_v1` failed. The agent didn't
+  change; the judge accepted it. A grounded-answer prompt that rejects a
+  false claim without claiming ignorance is still worth writing.
+- `reasoning_lost_app_have_codes` passed, but this time the answer left out
+  the caveat `judge_v1` misread, so this run doesn't show whether `judge_v2`
+  fixes that misreading.
+- The near-miss docs work as intended. In 5 cases one ranked above the right
+  doc: `invoices-and-receipts` above `billing-refunds` for "How do I get a
+  refund?", `sign-in-and-lockouts` above `password-reset` for a compromised
+  account, `team-members` above `account-deletion`, and
+  `email-notifications` above `password-reset`. The right doc was still in
+  the top 4 every time, so the answers held. On the 5-doc corpus, the 63/65
+  run scored MRR 1.00 and hit@1 100%.
+- Context precision was 34% before the new docs too: `top_k=4` pulls in
+  about two off-topic docs per question either way. Lowering `top_k` or
+  adding a similarity threshold (the `/chat` log records each chunk's score)
+  is the next retrieval change to measure.
+
+**Before that** (5 docs, 65 cases, `router_v2` + `direct_answer_v2`,
+`judge_v1`): 63/65 judge pass (97%), 100% retrieval recall.
+
+The v1 prompts (`router_v1`, `direct_answer_v1`) scored 56/59 on the
 original set. All three failures were in routing:
 
 - Off-topic requests ("What's the capital of France?") were answered, because
@@ -160,7 +224,7 @@ generalizes rather than fitting three questions, six held-out variants
 *before* changing the prompts: v1 passed 2/6 of them, v2 passes 5/6. On
 the original 59 cases v2 scores 58/59.
 
-The two remaining failures are not routing failures:
+The two failures left under v2 were not routing failures:
 
 - `adversarial_injection_rate_limit`: routes and retrieves correctly and
   states the real 1,000/min limit, but opens with "I don't have enough
@@ -171,9 +235,8 @@ The two remaining failures are not routing failures:
   regression (the grounded path is unchanged and passed under v1).
 
 The judge is itself noisy: rerunning one case three times gave the same
-answer text twice with opposite verdicts. Treat ±1-2 cases between runs as
-noise. Running the judge at temperature 0 or taking a majority vote would
-tighten this.
+answer text twice with opposite verdicts. That's why a failing verdict now
+goes to a majority vote. Still treat ±1-2 cases between runs as noise.
 
 ## Tests
 
@@ -185,10 +248,14 @@ pytest
 Everything runs offline in well under a second: a conftest fixture makes any
 unfaked call to Gemini or Qdrant fail the test instead of spending quota.
 Covered: agent routing (tool call → retrieval → grounded prompt, direct
-answers, empty retrieval, tool call with no query argument), 429 retry/backoff,
-chunking, retrieval and ingestion, the `/chat` endpoint and its log line,
-tracing and cost math, eval scoring, and golden-set integrity (unique ids,
-known categories, every expected doc id exists in `data/docs/`).
+answers, empty retrieval, tool call with no query argument), history reaching
+both model calls, 429 retry/backoff, chunking, retrieval and ingestion, the
+`/chat` endpoint and its log line, sessions (follow-ups, trimming, expiry,
+per-visitor isolation), rate limits (each rule run against both the
+in-memory and the Redis limiter via fakeredis, plus surviving a restart and
+Redis outages), tracing and cost math, eval scoring and judge voting, and
+golden-set integrity (unique ids, known categories, every expected doc id
+exists in `data/docs/`, no doc answers an `unanswerable` case).
 
 ## Run with Docker
 
@@ -265,7 +332,7 @@ those tend to leak into logs, `describe` output, and shell history.
 **Quota:** on the Gemini free tier, `gemini-3.5-flash-lite` (what
 `gemini-flash-lite-latest` resolves to) allows 500 requests/day per Google
 project, shared by everything using that project's keys. A full eval run is
-~200 requests, so give the deployed service a key from its own project;
+~220 requests, so give the deployed service a key from its own project;
 otherwise a couple of eval runs can exhaust the demo's quota. When the daily
 quota is gone, `/chat` returns a 503 in under a second whose `detail` says
 when it resets ("in about 8 hours"), plus a `Retry-After` header and a

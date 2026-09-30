@@ -2,6 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from app.agent.graph import run_agent
+from app.agent.history import Turn
 from app.eval.dataset import EvalCase
 from app.eval.judge import judge_answer
 
@@ -15,8 +16,15 @@ class EvalCaseResult:
     # Fraction of expected docs retrieved. Differs from retrieval_hit only for
     # multi-doc cases, where finding one of two docs isn't enough.
     retrieval_recall: float | None
+    # 1 / rank of the first expected doc among the distinct docs retrieved
+    # (0 if none was): hit rate says whether it was found, this says how high.
+    reciprocal_rank: float | None
+    # Share of the distinct docs retrieved that were expected: how much of
+    # the context was noise.
+    context_precision: float | None
     judge_correct: bool
     judge_reasoning: str
+    judge_votes: list[bool]
 
 
 @dataclass
@@ -38,19 +46,32 @@ class EvalReport:
             return 0.0
         return sum(r.judge_correct for r in self.results) / len(self.results)
 
+    def _mean(self, field_name: str) -> float:
+        """Mean of a per-case retrieval field over the cases it applies to."""
+        values = [getattr(r, field_name) for r in self.results if getattr(r, field_name) is not None]
+        return sum(values) / len(values) if values else 0.0
+
     @property
     def retrieval_hit_rate(self) -> float:
-        applicable = [r for r in self.results if r.retrieval_hit is not None]
-        if not applicable:
-            return 0.0
-        return sum(r.retrieval_hit for r in applicable) / len(applicable)
+        return self._mean("retrieval_hit")
 
     @property
     def retrieval_recall(self) -> float:
-        applicable = [r for r in self.results if r.retrieval_recall is not None]
-        if not applicable:
-            return 0.0
-        return sum(r.retrieval_recall for r in applicable) / len(applicable)
+        return self._mean("retrieval_recall")
+
+    @property
+    def mrr(self) -> float:
+        return self._mean("reciprocal_rank")
+
+    @property
+    def hit_at_1(self) -> float:
+        """Share of cases whose top retrieved doc was an expected one."""
+        ranks = [r.reciprocal_rank for r in self.results if r.reciprocal_rank is not None]
+        return sum(rank == 1.0 for rank in ranks) / len(ranks) if ranks else 0.0
+
+    @property
+    def context_precision(self) -> float:
+        return self._mean("context_precision")
 
     def pass_rate_by_category(self) -> dict[str, tuple[int, int]]:
         """{category: (passed, total)}, so one strong category can't hide a weak one."""
@@ -62,18 +83,29 @@ class EvalReport:
 
 
 async def run_case(case: EvalCase) -> EvalCaseResult:
-    result = await run_agent(case.query)
+    history = [Turn(**turn) for turn in case.history]
+    result = await run_agent(case.query, history=history)
     actual_answer = result.get("answer", "")
-    actual_sources = result.get("sources", [])
+    actual_sources = result.get("sources", [])  # one per chunk, best first
+    retrieved_docs = list(dict.fromkeys(actual_sources))
 
-    retrieval_hit = None
-    retrieval_recall = None
+    retrieval_hit = retrieval_recall = reciprocal_rank = context_precision = None
     if case.expected_doc_ids:
-        found = [doc_id in actual_sources for doc_id in case.expected_doc_ids]
+        found = [doc_id in retrieved_docs for doc_id in case.expected_doc_ids]
         retrieval_hit = any(found)
         retrieval_recall = sum(found) / len(found)
+        ranks = [retrieved_docs.index(doc_id) + 1 for doc_id in case.expected_doc_ids if doc_id in retrieved_docs]
+        reciprocal_rank = 1 / min(ranks) if ranks else 0.0
+        relevant = sum(doc_id in case.expected_doc_ids for doc_id in retrieved_docs)
+        context_precision = relevant / len(retrieved_docs) if retrieved_docs else 0.0
 
-    verdict = await judge_answer(case.query, case.reference_answer, actual_answer)
+    verdict = await judge_answer(
+        case.query,
+        case.reference_answer,
+        actual_answer,
+        history=history,
+        docs=[chunk.text for chunk in result.get("chunks") or []],
+    )
 
     return EvalCaseResult(
         case=case,
@@ -81,8 +113,11 @@ async def run_case(case: EvalCase) -> EvalCaseResult:
         actual_sources=actual_sources,
         retrieval_hit=retrieval_hit,
         retrieval_recall=retrieval_recall,
+        reciprocal_rank=reciprocal_rank,
+        context_precision=context_precision,
         judge_correct=verdict.correct,
         judge_reasoning=verdict.reasoning,
+        judge_votes=verdict.votes,
     )
 
 

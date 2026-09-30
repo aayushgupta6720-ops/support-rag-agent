@@ -3,9 +3,12 @@ import re
 import pytest
 
 import app.eval.harness as harness
+import app.eval.judge as judge
+from app.agent.history import Turn
 from app.eval.dataset import CATEGORIES, EvalCase, load_golden_set
-from app.eval.judge import JudgeVerdict
+from app.eval.judge import JudgeResult, JudgeVerdict
 from scripts.ingest import load_documents
+from tests.fakes import FakeGenerate, chunk, model_response
 
 
 def _case(id="c", category="grounded", expected=("password-reset",)):
@@ -20,14 +23,16 @@ def fake_agent(monkeypatch):
     class Fake:
         sources: list[str] = []
         correct = True
+        judged: list[dict] = []
 
     fake = Fake()
 
-    async def run_agent(query):
-        return {"answer": "an answer", "sources": fake.sources}
+    async def run_agent(query, history=None):
+        return {"answer": "an answer", "sources": fake.sources, "chunks": [chunk(d, f"text of {d}") for d in fake.sources]}
 
-    async def judge_answer(query, reference, actual):
-        return JudgeVerdict(correct=fake.correct, reasoning="because")
+    async def judge_answer(query, reference, actual, history=None, docs=None):
+        fake.judged.append({"history": history, "docs": docs})
+        return JudgeResult(correct=fake.correct, reasoning="because", votes=[fake.correct])
 
     monkeypatch.setattr(harness, "run_agent", run_agent)
     monkeypatch.setattr(harness, "judge_answer", judge_answer)
@@ -59,6 +64,13 @@ def test_category_shapes():
             assert len(case.expected_doc_ids) >= 2, case.id
         if case.category in {"unanswerable", "out_of_scope", "direct"}:
             assert case.expected_doc_ids == [], case.id
+        # a follow-up needs a conversation to follow: user first, turns
+        # alternating, the model's reply last; other cases stand alone
+        roles = [turn["role"] for turn in case.history]
+        if case.category == "multi_turn":
+            assert roles and roles == ["user", "model"] * (len(roles) // 2), case.id
+        else:
+            assert roles == [], case.id
 
 
 # Each unanswerable case stays unanswerable only while no doc covers it; a
@@ -121,6 +133,88 @@ async def test_pass_rate_overall_and_by_category(fake_agent):
 def test_empty_report_has_zero_rates():
     report = harness.EvalReport(results=[])
     assert (report.judge_pass_rate, report.retrieval_hit_rate, report.retrieval_recall) == (0.0, 0.0, 0.0)
+    assert (report.mrr, report.hit_at_1, report.context_precision) == (0.0, 0.0, 0.0)
+
+
+async def test_rank_and_precision_count_distinct_docs_in_retrieval_order(fake_agent):
+    # one entry per chunk: two chunks of the same doc are one doc for ranking
+    fake_agent.sources = ["api-keys", "api-keys", "api-rate-limits", "billing-refunds"]
+
+    result = await harness.run_case(_case(expected=("api-rate-limits",)))
+
+    assert result.retrieval_hit is True
+    assert result.reciprocal_rank == 0.5  # second distinct doc, not third chunk
+    assert result.context_precision == pytest.approx(1 / 3)
+
+
+async def test_mrr_hit_at_1_and_precision_over_the_cases_they_apply_to(fake_agent):
+    results = []
+    for id, sources in [("a", ["password-reset"]), ("b", ["api-keys", "password-reset"]), ("c", ["api-keys"])]:
+        fake_agent.sources = sources
+        results.append(await harness.run_case(_case(id=id, expected=("password-reset",))))
+    fake_agent.sources = []
+    results.append(await harness.run_case(_case(id="d", category="direct", expected=())))
+    report = harness.EvalReport(results=results)
+
+    assert report.mrr == pytest.approx((1 + 0.5 + 0) / 3)
+    assert report.hit_at_1 == pytest.approx(1 / 3)
+    assert report.context_precision == pytest.approx((1 + 0.5 + 0) / 3)
+
+
+async def test_a_multi_turn_case_runs_in_its_conversation_and_the_judge_sees_it(fake_agent, monkeypatch):
+    seen = []
+
+    async def run_agent(query, history=None):
+        seen.append(history)
+        return {"answer": "14 days", "sources": ["billing-refunds"], "chunks": [chunk("billing-refunds", "Annual: 14 days.")]}
+
+    monkeypatch.setattr(harness, "run_agent", run_agent)
+    case = _case(category="multi_turn", expected=("billing-refunds",))
+    case.history = [{"role": "user", "text": "Refund on monthly?"}, {"role": "model", "text": "Within 7 days."}]
+
+    await harness.run_case(case)
+
+    conversation = [Turn("user", "Refund on monthly?"), Turn("model", "Within 7 days.")]
+    assert seen == [conversation]
+    assert fake_agent.judged == [{"history": conversation, "docs": ["Annual: 14 days."]}]
+
+
+# --- the judge
+
+
+def _votes(*verdicts):
+    return FakeGenerate([model_response(parsed=JudgeVerdict(correct=v, reasoning=f"vote {i}"))
+                         for i, v in enumerate(verdicts)])
+
+
+@pytest.mark.parametrize(("verdicts", "correct", "calls"), [
+    ((True,), True, 1),                # a pass isn't rechecked
+    ((False, False), False, 2),        # two fails: the majority, no third vote
+    ((False, True, True), True, 3),    # a lone false fail is outvoted
+    ((False, True, False), False, 3),
+])
+async def test_a_failing_verdict_is_rejudged_and_the_majority_kept(monkeypatch, verdicts, correct, calls):
+    fake = _votes(*verdicts)
+    monkeypatch.setattr(judge, "generate", fake)
+
+    result = await judge.judge_answer("q", "ref", "answer")
+
+    assert (result.correct, len(fake.calls), result.votes) == (correct, calls, list(verdicts[:calls]))
+    assert result.reasoning == f"vote {list(verdicts).index(correct)}"  # from the winning side
+
+
+async def test_the_judge_is_shown_the_conversation_and_the_retrieved_docs(monkeypatch):
+    fake = _votes(True)
+    monkeypatch.setattr(judge, "generate", fake)
+
+    await judge.judge_answer("What about annual?", "14 days", "Within 14 days.",
+                             history=[Turn("user", "Refunds on monthly?"), Turn("model", "7 days.")],
+                             docs=["Annual plans: 14 days."])
+
+    prompt = fake.calls[0]["prompt"]
+    assert "User: Refunds on monthly?\nAgent: 7 days." in prompt
+    assert "Annual plans: 14 days." in prompt
+    assert prompt.endswith("Question: What about annual?\n\nReference: 14 days\n\nAgent answer: Within 14 days.")
 
 
 async def test_a_failing_case_is_recorded_and_the_run_continues(fake_agent, monkeypatch):
