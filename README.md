@@ -473,16 +473,25 @@ happen far more often, no longer do. On startup the app logs
 `{"event": "state_store", "backend": "redis"}` (or `"memory"`), which is how
 to check it picked the URL up.
 
-Searches run against Qdrant Cloud, and the cluster's region matters: the
-`qdrant_search` step took 0.7–1.0 s of a 3–4 s answer with the cluster in
-São Paulo and the app in Oregon. Each search used to make two round trips
-(a collection check, then the query); it now makes one. To cut the rest,
-put the cluster in the app's region:
+Searches run against Qdrant Cloud, and the cluster's region matters. With
+the cluster in São Paulo and the app in Oregon, the `qdrant_search` step
+took 0.7–1.0 s of a 3–4 s answer. Two changes cut that:
 
-1. Create a free cluster in AWS us-west-2.
-2. Point `QDRANT_URL` and `QDRANT_API_KEY` at it, both on Render and in
-   `.env`.
-3. Run `python -m scripts.ingest`.
+- Each search now makes one round trip instead of two; there's no longer a
+  collection check before every query. That brought it to 0.57 s.
+- The cluster moved to AWS us-west-2, next to the app. A warm search now
+  takes 16 ms, and the first search after a restart about 190 ms, including
+  the connection setup. A typical answer takes about 2 s.
+
+Moving a free cluster means deleting the old one first (Qdrant allows one per
+account), then pointing `QDRANT_URL` and `QDRANT_API_KEY` at the new one on
+Render and in `.env`, and running `python -m scripts.ingest`. Only the help
+articles live in Qdrant, rebuilt from `data/docs` in seconds. Sessions,
+limits, cached answers and feedback are in Redis, so the move loses
+nothing. While search is down, questions that need it get the 503 above.
+
+A free cluster is suspended after a week with no requests, and deleted
+after four weeks unless it's reactivated in the Qdrant console.
 
 **Google Cloud Run** (matches the existing Dockerfile directly):
 
