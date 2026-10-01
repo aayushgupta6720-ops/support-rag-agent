@@ -170,22 +170,35 @@ Pass rates are per category because an aggregate hides the weak spots. With
 this few cases per category, treat a single run as a smoke signal, not a
 benchmark: one flipped case moves a category by 20+ points.
 
-**Latest run** (`gemini-flash-lite-latest`, 73 cases, 11 docs, `router_v3`,
-`direct_answer_v3`, `grounded_answer_v3`, `judge_v2`): 73/73 judge pass,
-100% retrieval hit rate and recall, MRR 0.95, hit@1 91%, context precision
-34%, no errored cases. All 8 multi-turn cases pass, including the topic
-switch and the false premise after pushback.
+**Latest run**, with the live settings (`gemini-flash-lite-latest`, 73
+cases, 11 docs, `router_v3`, `direct_answer_v3`, `grounded_answer_v4`,
+`judge_v2`, `RETRIEVAL_MAX_SCORE_GAP=0.08`): 73/73 judge pass, 100%
+retrieval hit rate and recall, MRR 0.97, hit@1 95%, context precision 75%,
+no errored cases, and no verdict needed a re-vote.
 
-Three things changed at once (the prompts, the corpus, and the judge), so
-this run can't say which one moved a number. Read it with that in mind:
+`grounded_answer_v4` fixes how the agent rejects a false claim. v3's only
+fallback was "say you don't have enough information", so when a user
+asserted something the docs contradict, the model said it lacked
+information and then gave the right fact anyway ("I don't have enough
+information to confirm that. [...] 1,000 requests per minute"). v4 separates
+a claim the docs contradict (say no, and give what the docs say) from a
+question the docs don't cover (keep the fallback). Outside the unanswerable
+category, v3's run had 2 answers with that opener and v4's has none: all 6
+false premises, the contradicted adversarial claims, and the multi-turn
+false premise now start with a plain "No". The 6 unanswerable cases still
+fall back to saying the information isn't available. That's one run.
+
+**The run before** (`grounded_answer_v3`, no score gap): also 73/73, with
+MRR 0.95, hit@1 91% and context precision 34%. It was the first run with v3
+prompts, the 11-doc corpus and `judge_v2`, so it can't say which of the
+three moved a number:
 
 - No first verdict failed, so the majority vote never ran. It didn't rescue
   any case here.
-- `adversarial_injection_rate_limit` passed, but its answer still opens
+- `adversarial_injection_rate_limit` passed, but its answer still opened
   with "I don't have enough information to confirm that" before giving the
-  real 1,000/min limit, the wording `judge_v1` failed. The agent didn't
-  change; the judge accepted it. A grounded-answer prompt that rejects a
-  false claim without claiming ignorance is still worth writing.
+  real 1,000/min limit, the wording `judge_v1` failed. The agent hadn't
+  changed; the judge accepted it. `grounded_answer_v4` fixed the wording.
 - `reasoning_lost_app_have_codes` passed, but this time the answer left out
   the caveat `judge_v1` misread, so this run doesn't show whether `judge_v2`
   fixes that misreading.
@@ -241,7 +254,9 @@ don't-guess fallback being reused to reject a false claim: in these 49 cases
 it appeared 3 times without the gap and 2 times with it, so it's a prompt
 weakness the gap didn't create, though one sample can't rule out that the
 single doc of context made it likelier. The live demo runs with
-`RETRIEVAL_MAX_SCORE_GAP=0.08`; the fallback wording is the next prompt fix.
+`RETRIEVAL_MAX_SCORE_GAP=0.08`, and `grounded_answer_v4` (see "Latest run")
+fixed the fallback wording: with both, that case passes with "No, annual
+plans cannot be refunded for 60 days".
 
 **Before that** (5 docs, 65 cases, `router_v2` + `direct_answer_v2`,
 `judge_v1`): 63/65 judge pass (97%), 100% retrieval recall.

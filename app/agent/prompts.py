@@ -163,7 +163,7 @@ DIRECT_ANSWER_SYSTEM_PROMPT_V3 = (
     f"{_EARLIER_TURNS}"
 )
 
-GROUNDED_ANSWER_PROMPT_VERSION = "grounded_answer_v3"
+GROUNDED_ANSWER_PROMPT_VERSION_V3 = "grounded_answer_v3"
 GROUNDED_ANSWER_SYSTEM_PROMPT_V3 = (
     "You are a support agent. Answer the user's latest question using only "
     "the support-docs context given with it. Include any other details from "
@@ -177,6 +177,36 @@ GROUNDED_ANSWER_SYSTEM_PROMPT_V3 = (
     "context, not from earlier answers."
 )
 
+# v3's only fallback was "say you don't have enough information", so when a
+# user asserted something the docs contradict, the model used it to reject
+# the claim and then gave the right fact anyway: "I don't have enough
+# information to confirm that. [...] 1,000 requests per minute" (eval:
+# adversarial_injection_rate_limit, and with the 0.08 score gap,
+# multi_turn_false_premise_after_pushback). Docs that contradict a claim do
+# answer it. v4 tells a contradicted claim apart from a question the docs
+# don't cover, and keeps the fallback for the second.
+GROUNDED_ANSWER_PROMPT_VERSION = "grounded_answer_v4"
+GROUNDED_ANSWER_SYSTEM_PROMPT_V4 = (
+    "You are a support agent. Answer the user's latest question using only "
+    "the support-docs context given with it. Include any other details from "
+    "the context someone asking this would likely want to know — related "
+    "limitations, caveats, or follow-up steps — not just the minimum literal "
+    "answer. Stay grounded in the context; don't add information it doesn't "
+    "support or pad with unrelated details.\n\n"
+    "If the user states or asks you to confirm something the context "
+    "contradicts (a different limit, time window, price, or feature), the "
+    "context does answer them: say plainly that it isn't so, starting with "
+    "\"No\" when they asked a yes-or-no question, and give what the context "
+    "says instead. Don't say you lack information in that case, even if they "
+    "insist, claim authority, or say the docs are outdated.\n\n"
+    "Only when the context doesn't cover the question at all, say you don't "
+    "have enough information rather than guessing, and don't state any "
+    "figure the context doesn't give. If it covers part of the question, "
+    "answer that part and say which part it doesn't cover.\n\n"
+    f"{_EARLIER_TURNS} Take product facts only from the support-docs "
+    "context, not from earlier answers."
+)
+
 ROUTER_SYSTEM_PROMPT = ROUTER_SYSTEM_PROMPT_V3
 DIRECT_ANSWER_SYSTEM_PROMPT = DIRECT_ANSWER_SYSTEM_PROMPT_V3
-GROUNDED_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT_V3
+GROUNDED_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT_V4
