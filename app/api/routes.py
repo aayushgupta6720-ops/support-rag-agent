@@ -25,7 +25,7 @@ from app.core.observability import log_event, start_trace
 from app.models.schemas import ArticleResponse, ChatRequest, ChatResponse, HealthResponse
 from app.rag.documents import load_documents
 from app.rag.ingest import Document
-from app.rag.qdrant_store import SearchUnavailableError
+from app.rag.qdrant_store import SearchUnavailableError, check_search
 
 router = APIRouter()
 
@@ -113,6 +113,26 @@ def _chat_text(query: str, search_query: str | None = None) -> dict:
 async def health() -> HealthResponse:
     """Liveness check — also doubles as an uptime probe once deployed (Step 6)."""
     return HealthResponse(status="healthy", timestamp=time.time())
+
+
+@router.get("/health/search", response_model=None, dependencies=[rate_limit("search_check")])
+async def health_search() -> dict | JSONResponse:
+    """Checks that search works: one real Qdrant search and a count, with no
+    model call, so it costs no Gemini quota. The keep-alive workflow calls it
+    twice a week so the free Qdrant cluster never sits idle long enough to be
+    suspended. Kept apart from /health, which Render's health check uses: a
+    Qdrant outage shouldn't make Render restart the app."""
+    start = time.perf_counter()
+    try:
+        points = await check_search()
+    except SearchUnavailableError as exc:
+        log_event(event="search_check", ok=False, error=str(exc))
+        return _error_response(exc)
+    search_ms = round((time.perf_counter() - start) * 1000, 2)
+    log_event(event="search_check", ok=points > 0, points=points, search_ms=search_ms)
+    if points == 0:  # reachable, but nothing ingested: every question would find nothing
+        return JSONResponse(status_code=503, content={"detail": "The help-article index is empty."})
+    return {"status": "healthy", "points": points, "search_ms": search_ms}
 
 
 @router.post("/chat", response_model=ChatResponse, dependencies=[rate_limit("chat")])

@@ -1,0 +1,31 @@
+name: Keep search active
+
+# Qdrant Cloud suspends a free cluster after a week without requests, and
+# deletes it after four. This runs a real search through the live app twice
+# a week, so a quiet spell on the demo can't take search down. Twice, not
+# once: a weekly run landing just past the 7 days (GitHub can delay scheduled
+# runs) would be too late. It costs no Gemini quota. If search is broken, the
+# run fails, and GitHub emails the repo owner.
+#
+# GitHub turns scheduled workflows off in a public repo after 60 days with no
+# commits; re-enable it from the Actions tab if that happens.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1,4"  # Mondays and Thursdays, 06:17 UTC
+  workflow_dispatch:  # run it by hand from the Actions tab
+
+permissions: {}
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Search through the live app
+        # The free Render service sleeps when idle and takes up to a minute to
+        # wake, hence the long timeout and the retries.
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --retry 4 --retry-delay 20 --retry-all-errors --max-time 90 \
+            https://support-rag-agent.onrender.com/health/search

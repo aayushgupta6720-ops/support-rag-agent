@@ -156,7 +156,10 @@ def build_rate_limiters(settings: Settings, redis: Redis | None = None) -> dict[
     # Ratings cost no model calls, but each one is stored: enough for a
     # visitor to rate every answer they could get, not enough to flood it.
     feedback = RateLimiter("ratings", [Limit(20, 60, "a minute"), Limit(100, 24 * 3600, "a day")])
-    limiters = {"chat": chat, "feedback": feedback}
+    # /health/search makes a Qdrant request but no model call; a scheduler
+    # needs one now and then, not a stream.
+    search_check = RateLimiter("search checks", [Limit(6, 60, "a minute")])
+    limiters = {"chat": chat, "feedback": feedback, "search_check": search_check}
     return {name: RedisRateLimiter(limiter, redis) if redis else limiter for name, limiter in limiters.items()}
 
 

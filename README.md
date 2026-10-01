@@ -19,7 +19,7 @@ latency/cost observability.
 app/
   main.py              FastAPI app instance, mounts the router, serves the help center at /
   static/              Help-center page and chat widget (plain HTML/CSS/JS, no build step)
-  api/routes.py        /health and /chat endpoints
+  api/routes.py        /health, /health/search, /chat and /articles endpoints
   api/ratelimit.py     Per-visitor /chat limits, counted in Redis (or in memory)
   api/sessions.py      Multi-turn chat history per session, in Redis (or in memory)
   api/answer_cache.py  Reused answers to repeat first questions, in Redis (or in memory)
@@ -491,7 +491,19 @@ limits, cached answers and feedback are in Redis, so the move loses
 nothing. While search is down, questions that need it get the 503 above.
 
 A free cluster is suspended after a week with no requests, and deleted
-after four weeks unless it's reactivated in the Qdrant console.
+after four weeks unless it's reactivated in the Qdrant console. A quiet
+week on the demo would be enough, so a GitHub Actions workflow
+(`.github/workflows/keepalive.yml`) calls `GET /health/search` twice a week,
+on Mondays and Thursdays. Twice rather than once: GitHub can delay
+scheduled runs, and a weekly run that lands just after the 7 days would be
+too late.
+
+That endpoint runs one real Qdrant search and a count. It makes no model
+call, so it costs no Gemini quota. It returns a 503 if search fails or the
+index is empty, which makes the run fail and GitHub email you. It's
+separate from `/health` so that a Qdrant outage never makes Render restart
+the app. GitHub turns scheduled workflows off after 60 days without commits
+to a public repo; if that happens, re-enable it from the Actions tab.
 
 **Google Cloud Run** (matches the existing Dockerfile directly):
 

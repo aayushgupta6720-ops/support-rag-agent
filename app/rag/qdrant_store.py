@@ -110,3 +110,16 @@ async def search(vector: list[float], top_k: int) -> list[ScoredPoint]:
     except (UnexpectedResponse, ResponseHandlingException, ApiException, httpx.HTTPError) as exc:
         raise SearchUnavailableError(f"{type(exc).__name__}: {exc}") from exc
     return response.points
+
+
+async def check_search() -> int:
+    """A real search with a fixed vector, plus the point count, without an
+    embedding call. It's the same kind of request a visitor's question makes,
+    so it counts as activity for a free cluster, which Qdrant suspends after
+    a week without any. Returns how many chunks the collection holds."""
+    await search([1.0] * get_settings().embedding_dim, top_k=1)
+    try:
+        result = await get_client().count(collection_name=get_settings().qdrant_collection, exact=True)
+    except (UnexpectedResponse, ResponseHandlingException, ApiException, httpx.HTTPError) as exc:
+        raise SearchUnavailableError(f"{type(exc).__name__}: {exc}") from exc
+    return result.count
