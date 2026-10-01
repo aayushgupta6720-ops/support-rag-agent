@@ -13,7 +13,7 @@ services:
       - key: CLIENT_IP_HEADER
         value: CF-Connecting-IP   # Render sits behind Cloudflare, which sets this; the rate limit keys on it
       - key: RETRIEVAL_MAX_SCORE_GAP
-        value: "0.08"   # drop chunks scoring 0.08+ below the best one (README: "Score thresholds")
+        value: "0.10"   # drop chunks scoring 0.10+ below the best one (README: "Score thresholds")
       - key: GEMINI_API_KEY
         sync: false
       - key: QDRANT_URL
