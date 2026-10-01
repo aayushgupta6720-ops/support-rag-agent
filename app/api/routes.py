@@ -1,9 +1,11 @@
 import math
 import secrets
 import time
+import uuid
 from datetime import datetime, timezone
+from functools import lru_cache
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.agent.graph import run_agent
@@ -20,7 +22,9 @@ from app.core.gemini_client import (
     start_retry_window,
 )
 from app.core.observability import log_event, start_trace
-from app.models.schemas import ChatRequest, ChatResponse, HealthResponse
+from app.models.schemas import ArticleResponse, ChatRequest, ChatResponse, HealthResponse
+from app.rag.documents import load_documents
+from app.rag.ingest import Document
 from app.rag.qdrant_store import SearchUnavailableError
 
 router = APIRouter()
@@ -197,4 +201,20 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
         sources=list(dict.fromkeys(sources)),
         latency_ms=elapsed_ms,
         session_id=session_id,
+        answer_id=uuid.uuid4().hex,
     )
+
+
+@lru_cache
+def _articles() -> dict[str, Document]:
+    return {doc.doc_id: doc for doc in load_documents()}
+
+
+@router.get("/articles/{doc_id}", response_model=ArticleResponse)
+async def article(doc_id: str) -> ArticleResponse:
+    """A help article, for the chat widget's source links. Looked up by id
+    in the loaded docs, never used as a path."""
+    doc = _articles().get(doc_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="There's no help article with that id.")
+    return ArticleResponse(doc_id=doc.doc_id, title=doc.title, body=doc.text)

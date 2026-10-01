@@ -230,7 +230,42 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .bubble code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; background: rgba(127, 127, 127, 0.15); padding: 1px 4px; border-radius: 4px; }
 
 .sources { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.78rem; color: var(--text-muted); padding-left: 2px; }
-.source-chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 2px 9px; color: var(--text); }
+.source-chip {
+  border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 2px 9px;
+  color: var(--brand); font-size: 0.78rem; cursor: pointer; text-decoration: underline; text-decoration-color: transparent;
+}
+.source-chip:hover { border-color: var(--brand); text-decoration-color: currentColor; }
+
+.rating { display: flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--text-muted); padding-left: 2px; }
+.rating-label { margin-right: 2px; }
+.rating-button {
+  border: 1px solid transparent; background: none; border-radius: 8px; width: 28px; height: 26px;
+  display: grid; place-items: center; cursor: pointer; color: var(--text-muted);
+}
+.rating-button:hover:not(:disabled) { border-color: var(--border); color: var(--brand); background: var(--surface); }
+.rating-button:disabled { opacity: 0.5; cursor: default; }
+.rating-button svg { width: 16px; height: 16px; }
+.rating-button .thumb-down { transform: rotate(180deg); }
+.rating-done { color: var(--text-muted); }
+
+.chat-panel.showing-article .chat-log,
+.chat-panel.showing-article .chat-composer,
+.chat-panel.showing-article .chat-footnote { display: none; }
+.chat-article { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.chat-article[hidden] { display: none; }
+.article-back {
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+  margin: 10px 10px 0; border: 0; background: none; color: var(--brand); cursor: pointer;
+  padding: 6px 8px; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+}
+.article-back:hover { background: var(--brand-soft); }
+.article-back svg { width: 16px; height: 16px; stroke-width: 2.2; }
+.article-body { flex: 1; overflow-y: auto; padding: 4px 18px 18px; font-size: 0.93rem; outline: none; }
+.article-title { font-size: 1.1rem; margin: 6px 0 12px; letter-spacing: -0.01em; }
+.article-body p { margin: 0 0 12px; }
+.article-body ul, .article-body ol { margin: 0 0 12px; padding-left: 20px; }
+.article-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+.article-loading { color: var(--text-muted); }
 
 .suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
 .suggestion {

@@ -47,3 +47,25 @@ def test_every_doc_has_a_title_for_its_source_chip():
 
 def test_health_is_still_json_for_the_platform_check():
     assert TestClient(app).get("/health").json()["status"] == "healthy"
+
+
+def test_every_help_article_is_served_by_its_id():
+    from app.rag.documents import load_documents
+
+    client = TestClient(app)
+    for doc in load_documents():
+        article = client.get(f"/articles/{doc.doc_id}").json()
+        assert (article["doc_id"], article["title"]) == (doc.doc_id, doc.title)
+        assert article["body"] == doc.text and not article["body"].startswith("#")
+
+
+def test_an_unknown_or_path_like_article_id_is_a_404():
+    client = TestClient(app)
+    for doc_id in ("no-such-article", "..%2F..%2Fapp%2Fmain", "%2E%2E", "README"):
+        assert client.get(f"/articles/{doc_id}").status_code == 404, doc_id
+
+
+def test_the_widget_links_sources_to_articles_and_can_rate_answers():
+    widget = TestClient(app).get("/static/chat.js").text
+    assert '"/articles/" + encodeURIComponent(docId)' in widget
+    assert 'fetch("/feedback"' in widget

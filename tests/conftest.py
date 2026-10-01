@@ -5,6 +5,7 @@ import app.main
 import app.rag.embeddings
 import app.rag.qdrant_store
 from app.api.answer_cache import build_answer_cache
+from app.api.feedback import build_feedback_store
 from app.api.ratelimit import build_rate_limiters
 from app.api.sessions import build_session_store
 from app.core.config import get_settings
@@ -28,6 +29,7 @@ def block_external_services(monkeypatch):
     monkeypatch.setattr(get_settings(), "retrieval_min_score", 0.0)
     monkeypatch.setattr(get_settings(), "retrieval_max_score_gap", 0.0)
     monkeypatch.setattr(get_settings(), "log_chat_text", False)
+    monkeypatch.setattr(get_settings(), "feedback_export_token", "")
 
 
 @pytest.fixture(autouse=True)
@@ -36,3 +38,4 @@ def fresh_app_state(monkeypatch):
     monkeypatch.setattr(app.main.app.state, "rate_limiters", build_rate_limiters(get_settings()))
     monkeypatch.setattr(app.main.app.state, "sessions", build_session_store(get_settings()))
     monkeypatch.setattr(app.main.app.state, "answer_cache", build_answer_cache(get_settings()))
+    monkeypatch.setattr(app.main.app.state, "feedback", build_feedback_store(get_settings()))

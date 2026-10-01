@@ -7,3 +7,4 @@ venv/
 .DS_Store
 data/eval/results/
 .claude/settings.local.json
+data/eval/feedback_candidates.jsonl

@@ -10,23 +10,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.rag.documents import DOCS_DIR  # noqa: E402
+from app.rag.documents import load_documents as _load_documents  # noqa: E402
 from app.rag.ingest import Document, ingest_documents  # noqa: E402
-
-DOCS_DIR = Path(__file__).resolve().parent.parent / "data" / "docs"
 
 
 def load_documents() -> list[Document]:
-    documents = []
-    for path in sorted(DOCS_DIR.glob("*.md")):
-        text = path.read_text(encoding="utf-8").strip()
-        title, body = path.stem, text
-        first_line, _, rest = text.partition("\n")
-        if first_line.startswith("#"):
-            # Ingest heads every chunk with the title, so leaving the heading
-            # in the body would repeat it in the first chunk.
-            title, body = first_line.lstrip("#").strip() or path.stem, rest.strip()
-        documents.append(Document(doc_id=path.stem, title=title, text=body))
-    return documents
+    return _load_documents(DOCS_DIR)
 
 
 async def main() -> None:

@@ -41,6 +41,8 @@
   const sendButton = $("chat-send");
   const counter = $("chat-count");
   const greeting = $("chat-greeting");
+  const articleView = $("chat-article");
+  const articleBody = $("chat-article-body");
 
   // ---- state, kept for the tab's lifetime so a refresh keeps the chat ------
 
@@ -82,7 +84,9 @@
   }
 
   // Paragraphs, bulleted and numbered lists: the formatting answers use.
-  function formatAnswer(text) {
+  // softWrap joins a paragraph's lines with spaces, for the help articles,
+  // whose source text is hard-wrapped; in answers a newline is a break.
+  function formatAnswer(text, softWrap) {
     const fragment = document.createDocumentFragment();
     let list = null;
     let paragraph = null;
@@ -101,7 +105,7 @@
         continue;
       }
       list = null;
-      if (paragraph) paragraph.appendChild(document.createElement("br"));
+      if (paragraph) paragraph.appendChild(softWrap ? document.createTextNode(" ") : document.createElement("br"));
       else { paragraph = el("p"); fragment.appendChild(paragraph); }
       appendInline(paragraph, line);
     }
@@ -116,10 +120,97 @@
     wrap.appendChild(bubble);
     if (message.sources && message.sources.length) {
       const sources = el("div", "sources", "From:");
-      for (const id of message.sources) sources.appendChild(el("span", "source-chip", SOURCE_TITLES[id] || id));
+      for (const id of message.sources) {
+        const chip = el("button", "source-chip", SOURCE_TITLES[id] || id);
+        chip.type = "button";
+        chip.setAttribute("aria-label", "Read the article: " + (SOURCE_TITLES[id] || id));
+        chip.addEventListener("click", () => openArticle(id));
+        sources.appendChild(chip);
+      }
       wrap.appendChild(sources);
     }
+    if (message.role === "bot" && message.answerId) wrap.appendChild(renderRating(message));
     log.appendChild(wrap);
+  }
+
+  const THUMB = "M7 11v9M7 11l4-7c1.3 0 2 1 2 2.2V10h5.3a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 17 20H7";
+
+  function thumbIcon(down) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    if (down) svg.setAttribute("class", "thumb-down");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", THUMB);
+    svg.appendChild(path);
+    return svg;
+  }
+
+  // Rating sends the rated question and answer, so the note says so.
+  function renderRating(message) {
+    const row = el("div", "rating");
+    if (message.rated) {
+      row.appendChild(el("span", "rating-done", "Thanks for the feedback."));
+      return row;
+    }
+    row.appendChild(el("span", "rating-label", "Helpful?"));
+    for (const rating of ["up", "down"]) {
+      const button = el("button", "rating-button");
+      button.type = "button";
+      button.setAttribute("aria-label", rating === "up" ? "Yes, this helped" : "No, this didn't help");
+      button.title = "Rating saves this question and answer so we can improve the assistant.";
+      button.appendChild(thumbIcon(rating === "down"));
+      button.addEventListener("click", () => rate(message, rating, row));
+      row.appendChild(button);
+    }
+    return row;
+  }
+
+  async function rate(message, rating, row) {
+    row.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+    try {
+      const response = await fetch("/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          answer_id: message.answerId, rating: rating,
+          question: message.question, answer: message.text, sources: message.sources || [],
+        }),
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      message.rated = rating;
+      save();
+      row.replaceWith(renderRating(message));
+    } catch (error) {
+      row.querySelectorAll("button").forEach((button) => { button.disabled = false; });
+      const label = row.querySelector(".rating-label");
+      if (label) label.textContent = "Couldn't send that. Try again?";
+    }
+  }
+
+  // ---- articles -----------------------------------------------------------------------
+
+  async function openArticle(docId) {
+    articleBody.replaceChildren(el("p", "article-loading", "Loading the article…"));
+    panel.classList.add("showing-article");
+    articleView.hidden = false;
+    $("chat-article-back").focus();
+    try {
+      const response = await fetch("/articles/" + encodeURIComponent(docId));
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const article = await response.json();
+      articleBody.replaceChildren(el("h3", "article-title", article.title), formatAnswer(article.body, true));
+    } catch (error) {
+      articleBody.replaceChildren(el("p", "article-loading", "Couldn't load that article. Please try again."));
+    }
+  }
+
+  function closeArticle() {
+    if (articleView.hidden) return false;
+    articleView.hidden = true;
+    panel.classList.remove("showing-article");
+    input.focus();
+    return true;
   }
 
   function renderWelcome() {
@@ -193,6 +284,7 @@
     const query = text.trim();
     if (!query || busy) return;
     openPanel();
+    closeArticle();
     busy = true;
     updateComposer();
     addMessage({ role: "user", text: query });
@@ -210,7 +302,10 @@
       if (response.ok) {
         const body = await response.json();
         state.sessionId = body.session_id || state.sessionId;
-        addMessage({ role: "bot", text: body.answer, sources: body.sources || [] });
+        addMessage({
+          role: "bot", text: body.answer, sources: body.sources || [],
+          answerId: body.answer_id, question: query,
+        });
       } else {
         addMessage({ role: "system", text: await errorText(response) });
       }
@@ -284,6 +379,7 @@
   $("chat-close").addEventListener("click", closePanel);
   $("chat-new").addEventListener("click", () => {
     if (busy) return;
+    closeArticle();
     state.sessionId = null;
     state.messages = [];
     save();
@@ -291,8 +387,9 @@
     input.focus();
   });
   greeting.querySelector(".chat-greeting-close").addEventListener("click", dismissGreeting);
+  $("chat-article-back").addEventListener("click", closeArticle);
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !panel.hidden) closePanel();
+    if (event.key === "Escape" && !panel.hidden && !closeArticle()) closePanel();
   });
 
   // Page controls: the hero search box, "popular" chips, topic cards, and

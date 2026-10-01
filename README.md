@@ -22,6 +22,8 @@ app/
   api/routes.py        /health and /chat endpoints
   api/ratelimit.py     Per-visitor /chat limits, counted in Redis (or in memory)
   api/sessions.py      Multi-turn chat history per session, in Redis (or in memory)
+  api/answer_cache.py  Reused answers to repeat first questions, in Redis (or in memory)
+  api/feedback.py      Thumbs up/down on answers, and the token-protected export
   api/body_limit.py    Refuses oversized request bodies before they're read
   core/config.py       Settings, loaded from .env
   core/gemini_client.py Shared, cached google-genai client
@@ -31,6 +33,7 @@ app/
     chunking.py        Paragraph-packing text chunker with word-boundary overlap
     embeddings.py       Gemini embedding calls (gemini-embedding-001), batched at 100
     qdrant_store.py     Async Qdrant client, collection setup, search, stale-chunk deletes
+    documents.py        Loads the help articles from data/docs/
     ingest.py           Chunk + title-prefix + embed + upsert documents
     retrieval.py        Embed a query and fetch top-k chunks
   agent/
@@ -50,6 +53,7 @@ scripts/
   ingest.py            CLI: loads data/docs/*.md and ingests into Qdrant
   eval.py              CLI: runs the eval harness, prints + saves a report
   threshold_sweep.py   CLI: measures retrieval score thresholds offline from saved scores
+  feedback_candidates.py CLI: turns thumbs-down ratings into draft eval cases
 data/docs/             11 sample support docs used by the ingestion script
 data/eval/             Golden set + timestamped eval run results
 mcp_server/            Optional MCP wrapper (separate venv, see below)
@@ -105,7 +109,9 @@ setup. The widget:
 
 - keeps the `session_id`, so follow-ups work, and keeps the conversation
   for the browser tab's lifetime;
-- shows each answer's source articles;
+- shows each answer's source articles, each opening the full article inside
+  the panel (served by `GET /articles/{doc_id}`);
+- has thumbs up and down under each answer (see "Feedback" below);
 - shows a "still working" note on slow replies (a cold start on Render's
   free plan takes up to a minute);
 - shows the API's own message for rate limits, quota and timeouts.
@@ -115,6 +121,20 @@ Content-Security-Policy only allows its own origin, so even if markup got
 into an answer, it couldn't load or run anything. It's full-screen on
 phones, follows the system's dark mode, and works with the keyboard alone
 (Enter sends, Shift+Enter starts a new line, Escape closes).
+
+**Feedback.** Every response has an `answer_id`, and the widget's thumbs
+post it to `POST /feedback` with the rated question and answer. Only the
+visitor's own chat sends those, and only when they choose to rate, so a
+rating is the one place a question gets stored. Ratings have their own
+rate limit (20 a minute, 100 a day), and the newest 2,000 are kept in Redis.
+
+`GET /feedback/export` returns them. It needs `FEEDBACK_EXPORT_TOKEN` as a
+bearer token, and doesn't exist without one. `python -m
+scripts.feedback_candidates` turns the thumbs-down into draft eval cases in
+`data/eval/feedback_candidates.jsonl` (gitignored), one per distinct
+question, marked held-out. Each draft needs a category, expected docs and a
+reference answer before it moves into the golden set. That's how a real
+visitor's bad answer becomes a test the agent has to pass.
 
 Conversations can have follow-ups. Every response includes a `session_id`;
 send it back with the next question and the agent sees the last 3

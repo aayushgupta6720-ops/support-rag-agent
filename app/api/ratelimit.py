@@ -147,12 +147,17 @@ class RedisRateLimiter:
 
 def build_rate_limiters(settings: Settings, redis: Redis | None = None) -> dict[str, RateLimiter | RedisRateLimiter]:
     """One limiter per costly endpoint. A /chat call is up to three model
-    calls: route, embed, generate."""
+    calls: route, embed, generate. Each limiter counts under its own name
+    (`what`) in Redis."""
     chat = RateLimiter("questions", [
         Limit(settings.chat_limit_per_minute, 60, "a minute"),
         Limit(settings.chat_limit_per_day, 24 * 3600, "a day"),
     ])
-    return {"chat": RedisRateLimiter(chat, redis) if redis else chat}
+    # Ratings cost no model calls, but each one is stored: enough for a
+    # visitor to rate every answer they could get, not enough to flood it.
+    feedback = RateLimiter("ratings", [Limit(20, 60, "a minute"), Limit(100, 24 * 3600, "a day")])
+    limiters = {"chat": chat, "feedback": feedback}
+    return {name: RedisRateLimiter(limiter, redis) if redis else limiter for name, limiter in limiters.items()}
 
 
 _warned_missing_header = False

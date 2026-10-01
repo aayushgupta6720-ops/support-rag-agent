@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     # How long the answer to a conversation's first question is reused for an
     # identical question (see app/api/answer_cache.py). 0 turns caching off.
     answer_cache_ttl_s: int = 3600
+    # Bearer token for GET /feedback/export. Unset turns the endpoint off.
+    feedback_export_token: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

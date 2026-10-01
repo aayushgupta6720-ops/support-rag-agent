@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
@@ -33,3 +33,21 @@ class ChatResponse(BaseModel):
     )
     latency_ms: float
     session_id: str = Field(description="Send this back with the next question to continue the conversation.")
+    answer_id: str = Field(description="Identifies this answer when rating it at POST /feedback.")
+
+
+class ArticleResponse(BaseModel):
+    doc_id: str
+    title: str
+    body: str = Field(description="The article's Markdown, without its title heading.")
+
+
+class FeedbackRequest(BaseModel):
+    """A visitor's rating of one answer. The question and answer come from
+    the visitor's own chat, sent only when they choose to rate it."""
+
+    answer_id: str = Field(..., min_length=1, max_length=64)
+    rating: Literal["up", "down"]
+    question: str = Field(..., min_length=1, max_length=2000)
+    answer: str = Field(..., min_length=1, max_length=8000)
+    sources: list[Annotated[str, StringConstraints(max_length=64)]] = Field(default_factory=list, max_length=10)

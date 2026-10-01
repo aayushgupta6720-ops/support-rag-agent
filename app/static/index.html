@@ -6,8 +6,8 @@
   <title>Tidewell Help Center</title>
   <meta name="description" content="Help articles and an AI support assistant for Tidewell, a fictional ticketing product. A live demo of support-rag-agent.">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/styles.css?v=1">
-  <script src="/static/chat.js?v=1" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=2">
+  <script src="/static/chat.js?v=2" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#topics">Skip to help topics</a>
@@ -178,6 +178,13 @@
     </header>
 
     <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+
+    <div class="chat-article" id="chat-article" hidden>
+      <button type="button" class="article-back" id="chat-article-back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg> Back to chat
+      </button>
+      <article class="article-body" id="chat-article-body" tabindex="-1"></article>
+    </div>
 
     <form class="chat-composer" id="chat-composer">
       <label class="visually-hidden" for="chat-input">Message</label>
