@@ -48,7 +48,7 @@ app/
     prompts.py         Versioned judge prompt
   core/
     observability.py  Per-call trace (latency/tokens/cost per step) + JSON logging
-    pricing.py         Approximate per-token/per-char cost estimates
+    pricing.py         Approximate per-token cost estimates (Gemini paid-tier rates)
 scripts/
   ingest.py            CLI: loads data/docs/*.md and ingests into Qdrant
   eval.py              CLI: runs the eval harness, prints + saves a report

@@ -41,8 +41,11 @@ def test_trace_totals():
 
 
 def test_pricing_for_known_and_unknown_models():
-    assert generation_cost_usd("gemini-flash-lite-latest", 1_000_000, 1_000_000) == pytest.approx(0.375)
-    assert embedding_cost_usd("gemini-embedding-001", 1_000_000) == pytest.approx(0.15)
+    # Gemini 3.5 Flash-Lite: $0.30 per 1M input tokens, $2.50 per 1M output
+    assert generation_cost_usd("gemini-flash-lite-latest", 1_000_000, 1_000_000) == pytest.approx(2.80)
+    assert generation_cost_usd("gemini-3.5-flash-lite", 1_000_000, 0) == pytest.approx(0.30)
+    # $0.15 per 1M tokens, at ~4 characters per token
+    assert embedding_cost_usd("gemini-embedding-001", 4_000_000) == pytest.approx(0.15)
     # unknown models report zero instead of crashing the request
     assert generation_cost_usd("some-new-model", 100, 100) == 0.0
     assert embedding_cost_usd("some-new-model", 100) == 0.0
