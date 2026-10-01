@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.body_limit import BodySizeLimit
 from app.api.ratelimit import build_rate_limiters
@@ -30,6 +34,23 @@ log_event(event="state_store", backend="redis" if redis else "memory")
 app.add_middleware(BodySizeLimit, max_bytes=64 * 1024)
 
 
-@app.get("/")
-async def root() -> dict:
-    return {"service": settings.app_name, "status": "ok"}
+# The help-center page and its chat widget (app/static/). Everything it
+# loads comes from this origin, so the policy allows nothing else: even if
+# markup slipped into an answer, it couldn't load or run anything.
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+_PAGE_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    # so a deploy's new ?v= asset URLs are picked up straight away
+    "Cache-Control": "no-cache",
+}
+
+
+@app.get("/", include_in_schema=False)
+async def help_center() -> FileResponse:
+    return FileResponse(_STATIC_DIR / "index.html", headers=_PAGE_HEADERS)

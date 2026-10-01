@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tidewell Help Center</title>
+  <meta name="description" content="Help articles and an AI support assistant for Tidewell, a fictional ticketing product. A live demo of support-rag-agent.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css?v=1">
+  <script src="/static/chat.js?v=1" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#topics">Skip to help topics</a>
+
+  <header class="site-header">
+    <div class="container header-row">
+      <a class="brand" href="/" aria-label="Tidewell Help Center home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" class="brand-mark-bg"/>
+          <path d="M6 18c3 0 3-3 6-3s3 3 6 3 3-3 6-3 2 1.5 2 1.5" class="brand-mark-wave"/>
+          <path d="M6 23c3 0 3-3 6-3s3 3 6 3 3-3 6-3 2 1.5 2 1.5" class="brand-mark-wave brand-mark-wave-2"/>
+        </svg>
+        <span class="brand-name">Tidewell</span>
+        <span class="brand-sub">Help Center</span>
+      </a>
+      <nav class="header-nav" aria-label="Site">
+        <a href="/docs">API reference</a>
+        <a href="https://github.com/aayushgupta6720-ops/support-rag-agent" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-inner">
+        <h1>How can we help?</h1>
+        <p class="hero-lede">Ask our support assistant anything about your Tidewell account, billing, or the API.</p>
+        <form class="hero-ask" id="hero-ask">
+          <label class="visually-hidden" for="hero-input">Ask a question</label>
+          <svg class="hero-ask-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+          <input id="hero-input" type="text" maxlength="2000" autocomplete="off"
+                 placeholder="e.g. How do I get a refund on an annual plan?">
+          <button type="submit">Ask</button>
+        </form>
+        <p class="hero-popular">Popular:
+          <button type="button" class="link-chip" data-ask="I didn't get the password reset email. What should I do?">Reset email missing</button>
+          <button type="button" class="link-chip" data-ask="Can I get a refund on my monthly plan?">Refunds</button>
+          <button type="button" class="link-chip" data-ask="I keep getting 429 errors from the API. How should I handle them?">API 429 errors</button>
+        </p>
+      </div>
+    </section>
+
+    <section class="topics container" id="topics" aria-labelledby="topics-heading">
+      <h2 id="topics-heading">Browse by topic</h2>
+
+      <div class="topic-group">
+        <h3>Account &amp; security</h3>
+        <div class="topic-grid">
+          <button type="button" class="topic-card" data-ask="How do I reset my password?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2 2M14 9l2 2"/></svg>
+            <span class="topic-title">Resetting your password</span>
+            <span class="topic-text">Reset links, missing emails, and getting back in.</span>
+          </button>
+          <button type="button" class="topic-card" data-ask="How do I set up two-factor authentication?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+            <span class="topic-title">Two-factor authentication</span>
+            <span class="topic-text">Authenticator apps, backup codes, and recovery.</span>
+          </button>
+          <button type="button" class="topic-card" data-ask="Why can't I sign in to my account?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+            <span class="topic-title">Sign-in problems</span>
+            <span class="topic-text">Lockouts, new sign-in alerts, and sessions.</span>
+          </button>
+          <button type="button" class="topic-card" data-ask="How do I delete my account?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
+            <span class="topic-title">Deleting your account</span>
+            <span class="topic-text">The 30-day grace period and what gets erased.</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="topic-group">
+        <h3>Billing</h3>
+        <div class="topic-grid">
+          <button type="button" class="topic-card" data-ask="How do refunds work?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/></svg>
+            <span class="topic-title">Billing and refunds</span>
+            <span class="topic-text">Renewals, refund windows, and failed payments.</span>
+          </button>
+          <button type="button" class="topic-card" data-ask="Where can I download my invoices?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+            <span class="topic-title">Invoices and receipts</span>
+            <span class="topic-text">Downloading invoices, tax IDs, and billing contacts.</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="topic-group">
+        <h3>Teams &amp; notifications</h3>
+        <div class="topic-grid">
+          <button type="button" class="topic-card" data-ask="How do I invite someone to my team?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18 14.5c2 .7 3.2 2.6 3.5 5.5"/></svg>
+            <span class="topic-title">Team members and roles</span>
+            <span class="topic-text">Owners, admins, invitations, and ownership transfer.</span>
+          </button>
+          <button type="button" class="topic-card" data-ask="How do I change which emails I get from you?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+            <span class="topic-title">Email notifications</span>
+            <span class="topic-text">What you can turn off, and missing emails.</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="topic-group">
+        <h3>Developers</h3>
+        <div class="topic-grid">
+          <button type="button" class="topic-card" data-ask="How do I create and rotate API keys?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/></svg>
+            <span class="topic-title">Managing API keys</span>
+            <span class="topic-text">Creating, scoping, rotating, and revoking keys.</span>
+          </button>
+          <button type="button" class="topic-card" data-ask="What are the API rate limits?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17a8 8 0 1116 0"/><path d="M12 17l4-5"/></svg>
+            <span class="topic-title">API rate limits</span>
+            <span class="topic-text">Per-plan limits, 429s, and backoff.</span>
+          </button>
+          <button type="button" class="topic-card" data-ask="How do I export my data?">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
+            <span class="topic-title">Exporting your data</span>
+            <span class="topic-text">ZIP exports and the bulk export API.</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="contact container" aria-labelledby="contact-heading">
+      <h2 id="contact-heading">Still stuck?</h2>
+      <p>Our assistant answers from these help articles and tells you when they don't cover something.</p>
+      <button type="button" class="button-primary" data-open-chat>Chat with support</button>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p><strong>Tidewell is a fictional company.</strong> This help center is a live demo of
+        <a href="https://github.com/aayushgupta6720-ops/support-rag-agent" rel="noopener">support-rag-agent</a>:
+        answers come from an AI agent grounded in 11 sample help articles, and can be wrong.
+        Please don't enter personal information.</p>
+    </div>
+  </footer>
+
+  <!-- Chat widget -->
+  <button type="button" class="chat-launcher" id="chat-launcher" aria-controls="chat-panel" aria-expanded="false">
+    <svg class="icon-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>
+    <svg class="icon-close" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    <span class="visually-hidden">Chat with support</span>
+  </button>
+  <div class="chat-greeting" id="chat-greeting" hidden>
+    <button type="button" class="chat-greeting-close" aria-label="Dismiss">×</button>
+    <button type="button" class="chat-greeting-body" data-open-chat>👋 Questions? Our assistant can help.</button>
+  </div>
+
+  <section class="chat-panel" id="chat-panel" role="dialog" aria-modal="false" aria-labelledby="chat-title" hidden>
+    <header class="chat-header">
+      <div class="chat-avatar" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><path d="M6 18c3 0 3-3 6-3s3 3 6 3 3-3 6-3 2 1.5 2 1.5" class="brand-mark-wave"/><path d="M6 23c3 0 3-3 6-3s3 3 6 3 3-3 6-3 2 1.5 2 1.5" class="brand-mark-wave brand-mark-wave-2"/></svg>
+      </div>
+      <div class="chat-heading">
+        <h2 id="chat-title">Tidewell Support</h2>
+        <p class="chat-status"><span class="status-dot" aria-hidden="true"></span> AI assistant · cites help articles</p>
+      </div>
+      <button type="button" class="icon-button" id="chat-new" title="New conversation" aria-label="Start a new conversation">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/></svg>
+      </button>
+      <button type="button" class="icon-button" id="chat-close" title="Close" aria-label="Close chat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+
+    <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+
+    <form class="chat-composer" id="chat-composer">
+      <label class="visually-hidden" for="chat-input">Message</label>
+      <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Ask a question…" autocomplete="off"></textarea>
+      <button type="submit" class="send-button" id="chat-send" aria-label="Send" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6.5z"/></svg>
+      </button>
+    </form>
+    <p class="chat-footnote"><span id="chat-count" aria-live="polite"></span>AI-generated answers can be wrong. Don't share personal information.</p>
+  </section>
+</body>
+</html>

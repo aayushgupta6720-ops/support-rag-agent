@@ -2,7 +2,10 @@
 
 [![GitHub repo](https://img.shields.io/badge/GitHub-support--rag--agent-181717?logo=github)](https://github.com/aayushgupta6720-ops/support-rag-agent)
 
-**Live demo:** https://support-rag-agent.onrender.com ([`/health`](https://support-rag-agent.onrender.com/health), `POST /chat`)
+**Live demo:** https://support-rag-agent.onrender.com — a help center for
+Tidewell, a fictional ticketing product, with the agent as its chat widget
+([`/docs`](https://support-rag-agent.onrender.com/docs) for the API,
+[`/health`](https://support-rag-agent.onrender.com/health))
 — deployed on Render's free tier, so the first request after a period of
 inactivity takes ~30-60s to wake up.
 
@@ -14,7 +17,8 @@ latency/cost observability.
 
 ```
 app/
-  main.py              FastAPI app instance, mounts the router
+  main.py              FastAPI app instance, mounts the router, serves the help center at /
+  static/              Help-center page and chat widget (plain HTML/CSS/JS, no build step)
   api/routes.py        /health and /chat endpoints
   api/ratelimit.py     Per-visitor /chat limits, counted in Redis (or in memory)
   api/sessions.py      Multi-turn chat history per session, in Redis (or in memory)
@@ -92,6 +96,25 @@ Then `POST /chat` with `{"query": "..."}`. A LangGraph agent routes the query:
 a router call decides whether to call the `search_support_docs` tool or
 answer directly (e.g. for greetings), then a generation call produces a
 structured, schema-validated answer grounded in whatever was retrieved.
+
+Or open `http://localhost:8000/` for the help center. It's a page for a
+fictional company, Tidewell, with topic cards, a search box, and a chat
+widget in the corner. It's plain HTML, CSS and JavaScript in `app/static/`,
+served by the same app, so there's nothing to build and no cross-origin
+setup. The widget:
+
+- keeps the `session_id`, so follow-ups work, and keeps the conversation
+  for the browser tab's lifetime;
+- shows each answer's source articles;
+- shows a "still working" note on slow replies (a cold start on Render's
+  free plan takes up to a minute);
+- shows the API's own message for rate limits, quota and timeouts.
+
+Answers are built from text nodes, never HTML. The page's
+Content-Security-Policy only allows its own origin, so even if markup got
+into an answer, it couldn't load or run anything. It's full-screen on
+phones, follows the system's dark mode, and works with the keyboard alone
+(Enter sends, Shift+Enter starts a new line, Escape closes).
 
 Conversations can have follow-ups. Every response includes a `session_id`;
 send it back with the next question and the agent sees the last 3
@@ -313,7 +336,10 @@ per-visitor isolation), rate limits (each rule run against both the
 in-memory and the Redis limiter via fakeredis, plus surviving a restart and
 Redis outages), tracing and cost math, eval scoring and judge voting, and
 golden-set integrity (unique ids, known categories, every expected doc id
-exists in `data/docs/`, no doc answers an `unanswerable` case).
+exists in `data/docs/`, no doc answers an `unanswerable` case), and the help
+center (the widget, its assets, its security headers, and a title for every
+doc's source chip). The widget's behaviour was checked in headless Chrome:
+a topic card, a follow-up, a reload, and a phone-sized screen.
 
 ## Run with Docker
 
