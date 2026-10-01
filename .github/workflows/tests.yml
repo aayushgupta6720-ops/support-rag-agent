@@ -1,0 +1,29 @@
+name: Tests
+
+# Runs the offline test suite on every push and pull request, on the Python
+# the Dockerfile deploys (3.11). Render is set to deploy only after this
+# passes (Auto-Deploy: "After CI Checks Pass"), so a commit that breaks the
+# tests never reaches the live demo. Gemini, Qdrant and Redis are faked
+# (tests/conftest.py), so it needs no secrets and spends no quota.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"  # keep in step with the Dockerfile's FROM line
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pytest -q

@@ -413,6 +413,13 @@ pytest
 
 Everything runs offline in well under a second: a conftest fixture makes any
 unfaked call to Gemini or Qdrant fail the test instead of spending quota.
+
+GitHub Actions runs the suite on every push and pull request
+(`.github/workflows/tests.yml`), on Python 3.11 like the Dockerfile; a test
+fails if the two versions drift apart. Render deploys only after that run
+passes: `autoDeployTrigger: checksPass` in `render.yaml`, or Auto-Deploy set
+to "After CI Checks Pass" in the dashboard. So a commit that breaks the tests
+never reaches the live demo.
 Covered: agent routing (tool call → retrieval → grounded prompt, direct
 answers, empty retrieval, tool call with no query argument), history reaching
 both model calls, 429 retry/backoff, chunking, retrieval and ingestion, the

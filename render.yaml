@@ -5,6 +5,8 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /health
+    # deploy a push only once the Tests workflow (.github/workflows/tests.yml) passes on it
+    autoDeployTrigger: checksPass
     envVars:
       - key: ENVIRONMENT
         value: production

@@ -96,3 +96,11 @@ def test_the_workflow_calls_the_search_check_twice_a_week():
     workflow = (Path(__file__).resolve().parent.parent / ".github" / "workflows" / "keepalive.yml").read_text()
     assert "/health/search" in workflow
     assert 'cron: "17 6 * * 1,4"' in workflow  # under Qdrant's 7-day limit even if a run is delayed
+
+
+def test_ci_tests_on_the_python_the_dockerfile_deploys():
+    root = Path(__file__).resolve().parent.parent
+    dockerfile = (root / "Dockerfile").read_text()
+    deployed = dockerfile.split("FROM python:", 1)[1].split("-", 1)[0]  # "3.11" from python:3.11-slim
+    workflow = (root / ".github" / "workflows" / "tests.yml").read_text()
+    assert f'python-version: "{deployed}"' in workflow
