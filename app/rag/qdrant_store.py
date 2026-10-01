@@ -99,8 +99,9 @@ async def _delete(points_filter: Filter) -> None:
 
 
 async def search(vector: list[float], top_k: int) -> list[ScoredPoint]:
+    # No ensure_collection() here: it cost a round trip on every search, and
+    # a missing collection now fails as SearchUnavailableError (a 503) anyway.
     try:
-        await ensure_collection()
         response = await get_client().query_points(
             collection_name=get_settings().qdrant_collection,
             query=vector,

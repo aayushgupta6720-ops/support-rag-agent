@@ -128,6 +128,22 @@ earlier answers. A session ends after 30 idle minutes
 well as the id: a client can pick its own `session_id`, and without that,
 anyone reusing an id could continue someone else's conversation.
 
+The first question of a conversation is answered from a cache when someone
+has asked the same thing in the last hour (`ANSWER_CACHE_TTL_S`, 0 turns it
+off). The help center's topic cards and chips send the same few questions
+over and over, so this makes them instant and stops each one costing two
+Gemini calls.
+
+- **What counts as the same:** case and extra whitespace don't matter.
+- **What makes it miss:** the key also covers the models, prompt versions,
+  retrieval settings and collection, so changing any of them misses instead
+  of serving an answer made the old way.
+- **Privacy:** only a hash of the question is stored, never its text.
+- **Limits:** follow-ups are never cached. After re-ingesting changed docs,
+  cached answers can lag for up to the TTL.
+- **Where it lives:** the cache is in Redis when `REDIS_URL` is set,
+  otherwise in memory. The log line says `cache_hit`.
+
 Run the eval harness (agent + LLM-as-judge over a golden set) with:
 
 ```bash
@@ -387,6 +403,17 @@ so a Key Value restart resets the counts, but web-service restarts, which
 happen far more often, no longer do. On startup the app logs
 `{"event": "state_store", "backend": "redis"}` (or `"memory"`), which is how
 to check it picked the URL up.
+
+Searches run against Qdrant Cloud, and the cluster's region matters: the
+`qdrant_search` step took 0.7–1.0 s of a 3–4 s answer with the cluster in
+São Paulo and the app in Oregon. Each search used to make two round trips
+(a collection check, then the query); it now makes one. To cut the rest,
+put the cluster in the app's region:
+
+1. Create a free cluster in AWS us-west-2.
+2. Point `QDRANT_URL` and `QDRANT_API_KEY` at it, both on Render and in
+   `.env`.
+3. Run `python -m scripts.ingest`.
 
 **Google Cloud Run** (matches the existing Dockerfile directly):
 

@@ -4,6 +4,7 @@ import app.core.generation
 import app.main
 import app.rag.embeddings
 import app.rag.qdrant_store
+from app.api.answer_cache import build_answer_cache
 from app.api.ratelimit import build_rate_limiters
 from app.api.sessions import build_session_store
 from app.core.config import get_settings
@@ -34,3 +35,4 @@ def fresh_app_state(monkeypatch):
     """Each test starts with no requests counted and no chat history."""
     monkeypatch.setattr(app.main.app.state, "rate_limiters", build_rate_limiters(get_settings()))
     monkeypatch.setattr(app.main.app.state, "sessions", build_session_store(get_settings()))
+    monkeypatch.setattr(app.main.app.state, "answer_cache", build_answer_cache(get_settings()))

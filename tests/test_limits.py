@@ -25,6 +25,7 @@ def agent_calls(monkeypatch):
 
     monkeypatch.setattr(routes, "run_agent", fake_run_agent)
     monkeypatch.setattr(routes, "log_event", lambda **fields: None)
+    monkeypatch.setattr(app.state, "answer_cache", None)  # these count every request reaching the agent
     return calls
 
 

@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # session keeps, and how long an idle session lasts.
     session_max_exchanges: int = 3
     session_ttl_s: int = 1800
+    # How long the answer to a conversation's first question is reused for an
+    # identical question (see app/api/answer_cache.py). 0 turns caching off.
+    answer_cache_ttl_s: int = 3600
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

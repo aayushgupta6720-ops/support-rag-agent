@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.agent.graph import run_agent
+from app.api.answer_cache import answer_cache_key
 from app.api.ratelimit import client_key, rate_limit
 from app.core.config import get_settings
 from app.core.gemini_client import (
@@ -132,22 +133,37 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
     sessions = http_request.app.state.sessions
     history = await sessions.history(session_key)
 
-    try:
-        result = await run_agent(request.query, history=history)
-    except Exception as exc:
-        log_event(
-            event="chat_call",
-            session_id=session_id,
-            history_turns=len(history),
-            **_chat_text(request.query),
-            error=str(exc),
-            error_type=type(exc).__name__,
-            latency_ms=round((time.perf_counter() - start) * 1000, 2),
-            steps=trace.as_dicts(),
-        )
-        if isinstance(exc, _HANDLED_ERRORS):
-            return _error_response(exc)
-        raise
+    # A conversation's first question may already have an answer (the topic
+    # cards send the same few); a follow-up depends on its history.
+    cache = http_request.app.state.answer_cache
+    cache_key = answer_cache_key(request.query) if cache is not None and not history else None
+    result = await cache.get(cache_key) if cache_key else None
+    cache_hit = result is not None
+
+    if not cache_hit:
+        try:
+            result = await run_agent(request.query, history=history)
+        except Exception as exc:
+            log_event(
+                event="chat_call",
+                session_id=session_id,
+                history_turns=len(history),
+                **_chat_text(request.query),
+                error=str(exc),
+                error_type=type(exc).__name__,
+                latency_ms=round((time.perf_counter() - start) * 1000, 2),
+                steps=trace.as_dicts(),
+            )
+            if isinstance(exc, _HANDLED_ERRORS):
+                return _error_response(exc)
+            raise
+        if cache_key:
+            await cache.put(cache_key, {
+                "answer": result["answer"],
+                "sources": list(dict.fromkeys(result.get("sources", []))),
+                "router_prompt_version": result.get("router_prompt_version"),
+                "answer_prompt_version": result.get("answer_prompt_version"),
+            })
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     answer = result["answer"]
@@ -159,6 +175,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
         event="chat_call",
         session_id=session_id,
         history_turns=len(history),
+        cache_hit=cache_hit,
         **_chat_text(request.query, result.get("search_query")),
         answer_length=len(answer),
         sources=sources,
