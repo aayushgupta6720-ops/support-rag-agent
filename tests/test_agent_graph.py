@@ -42,7 +42,7 @@ def retrieve_calls(monkeypatch):
 async def test_tool_call_routes_through_retrieval(monkeypatch, retrieve_calls):
     fake = FakeGenerate([
         model_response(function_call=(SEARCH_DOCS_TOOL_NAME, {"query": "reset link expiry"})),
-        _answer("30 minutes."),
+        model_response(parsed=graph.GroundedAnswer(answer="30 minutes.", sources=["password-reset"])),
     ])
     monkeypatch.setattr(graph, "generate", fake)
 
@@ -51,15 +51,16 @@ async def test_tool_call_routes_through_retrieval(monkeypatch, retrieve_calls):
     # the router's rewritten query is what gets searched, not the raw user text
     assert retrieve_calls.queries == ["reset link expiry"]
     assert result["answer"] == "30 minutes."
-    assert result["sources"] == ["password-reset", "two-factor-auth"]
+    assert result["sources"] == ["password-reset"]  # what the answer used
+    assert result["retrieved_sources"] == ["password-reset", "two-factor-auth"]  # what the search found
     assert result["router_prompt_version"] == ROUTER_PROMPT_VERSION
     assert result["answer_prompt_version"] == GROUNDED_ANSWER_PROMPT_VERSION
 
     generation = fake.calls[1]
     assert generation["system_instruction"] == GROUNDED_ANSWER_SYSTEM_PROMPT
-    assert "Reset links last 30 minutes." in generation["prompt"]
+    assert "[doc: password-reset]\nReset links last 30 minutes." in generation["prompt"]
     assert "how long is the reset link good for?" in generation["prompt"]
-    assert generation["response_schema"] is graph.AgentAnswer
+    assert generation["response_schema"] is graph.GroundedAnswer
 
 
 # None: how the SDK parses a functionCall that comes without an "args" field
@@ -197,3 +198,25 @@ async def test_an_answer_that_does_not_parse_is_a_model_output_error(monkeypatch
 
     with pytest.raises(ModelOutputError):
         await graph.run_agent("hello")
+
+
+async def test_only_retrieved_docs_can_be_cited(monkeypatch, retrieve_calls):
+    monkeypatch.setattr(graph, "generate", FakeGenerate([
+        model_response(function_call=(SEARCH_DOCS_TOOL_NAME, {"query": "q"})),
+        model_response(parsed=graph.GroundedAnswer(
+            answer="...", sources=["two-factor-auth", "made-up-doc", "two-factor-auth", "password-reset"])),
+    ]))
+
+    result = await graph.run_agent("q")
+
+    assert result["sources"] == ["two-factor-auth", "password-reset"]  # no invented ids, no repeats
+
+
+async def test_a_direct_answer_cannot_cite_anything(monkeypatch, retrieve_calls):
+    fake = FakeGenerate([model_response(), _answer("Hi!")])
+    monkeypatch.setattr(graph, "generate", fake)
+
+    result = await graph.run_agent("hello")
+
+    assert fake.calls[1]["response_schema"] is graph.AgentAnswer
+    assert (result["sources"], result["retrieved_sources"]) == ([], [])

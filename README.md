@@ -183,6 +183,10 @@ metrics, computed over the cases that expect particular docs:
   distinct docs retrieved. Hit rate alone can't tell first place from last.
 - **Context precision**: the share of retrieved docs that were expected, so
   how much of what the answer was generated from was noise.
+- **Citation precision** and **citation recall**: answers name the docs they
+  actually used. Precision is the share of cited docs that were expected;
+  recall is the share of expected docs the answer cited. The report also
+  lists cases with nothing to find whose answer still cited a doc.
 
 It saves a timestamped JSON report under `data/eval/results/`, including
 which commit, prompt versions, model and `top_k` produced it. A case that
@@ -209,45 +213,80 @@ passes. Lowering the judge's temperature was the other option, but
 Gemini 3 models at the default 1.0, warning that lower values can cause
 looping, so it wasn't used.
 
-The golden set (`data/eval/golden_set.jsonl`) has 73 cases. Most of them test
+The golden set (`data/eval/golden_set.jsonl`) has 97 cases. Most of them test
 failure modes, not whether the model can find the answer to an easy question:
 
 | Category | Cases | What it checks |
 |---|---|---|
-| `grounded` | 23 | Answer is in one doc, including details beyond the headline fact |
-| `reasoning` | 5 | Applying a policy to the user's situation ("I bought annual 3 weeks ago — refund?") |
-| `false_premise` | 6 | Question assumes something the docs contradict ("SMS 2FA setup?") |
-| `multi_doc` | 5 | A complete answer needs facts from two docs |
-| `unanswerable` | 6 | In-domain but not in the docs — must not invent a price, phone number, etc. |
-| `out_of_scope` | 4 | Not a support question — should stay in role |
-| `adversarial` | 7 | Prompt injection and social engineering |
-| `robustness` | 3 | Typos, Spanish, vague phrasing |
+| `grounded` | 28 | Answer is in one doc, including details beyond the headline fact |
+| `reasoning` | 14 | Applying a policy to the user's situation ("I bought annual 3 weeks ago — refund?") |
+| `false_premise` | 9 | Question assumes something the docs contradict ("SMS 2FA setup?") |
+| `multi_doc` | 7 | A complete answer needs facts from two docs |
+| `unanswerable` | 8 | In-domain but not in the docs — must not invent a price, phone number, etc. |
+| `out_of_scope` | 5 | Not a support question — should stay in role |
+| `adversarial` | 8 | Prompt injection and social engineering |
+| `robustness` | 4 | Typos, Spanish, vague phrasing |
 | `direct` | 6 | Greetings and small talk — no retrieval |
 | `multi_turn` | 8 | A follow-up that only makes sense with the earlier turns ("What about annual plans?"), a topic switch, and a false premise after pushback |
+
+Every case belongs to a split:
+
+- **`dev`** (86 cases): the cases prompts and settings were tuned against.
+- **`held_out`** (11 cases): written before the latest change and never used
+  to tune it, so they show whether the change generalizes rather than
+  fitting the dev cases.
+
+Once held-out cases have informed a decision, they move to dev and fresh
+ones are written. The 13 written for the score gap and
+`grounded_answer_v5` moved to dev after they showed that 0.08 was too tight
+and that v5 hedged. The 11 current ones (`h2_*`) were written before
+`grounded_answer_v6`, and most need an article's rule applied to the
+user's situation. Run one split with `python -m scripts.eval held_out`.
 
 Pass rates are per category because an aggregate hides the weak spots. With
 this few cases per category, treat a single run as a smoke signal, not a
 benchmark: one flipped case moves a category by 20+ points.
 
-**Latest run**, with the live settings (`gemini-flash-lite-latest`, 73
-cases, 11 docs, `router_v3`, `direct_answer_v3`, `grounded_answer_v4`,
-`judge_v2`, `RETRIEVAL_MAX_SCORE_GAP=0.08`): 73/73 judge pass, 100%
-retrieval hit rate and recall, MRR 0.97, hit@1 95%, context precision 75%,
-no errored cases, and no verdict needed a re-vote.
+**Latest run** (`gemini-flash-lite-latest`, 97 cases, `router_v4`,
+`direct_answer_v3`, `grounded_answer_v6`, `judge_v2`,
+`RETRIEVAL_MAX_SCORE_GAP=0.10`): 97/97 judge pass, 11/11 held-out and 86/86
+dev, with no re-votes needed. Retrieval hit rate and recall were 100%, MRR
+0.96, hit@1 93% and context precision 55%. Citation precision was 94% and
+citation recall 99%, and no answer with nothing to find cited a doc. The
+eval key's daily quota ran out after 80 cases, so the last 17 ran on the
+demo's key, with the same code and settings.
 
-`grounded_answer_v4` fixes how the agent rejects a false claim. v3's only
-fallback was "say you don't have enough information", so when a user
-asserted something the docs contradict, the model said it lacked
-information and then gave the right fact anyway ("I don't have enough
-information to confirm that. [...] 1,000 requests per minute"). v4 separates
-a claim the docs contradict (say no, and give what the docs say) from a
-question the docs don't cover (keep the fallback). Outside the unanswerable
-category, v3's run had 2 answers with that opener and v4's has none: all 6
-false premises, the contradicted adversarial claims, and the multi-turn
-false premise now start with a plain "No". The 6 unanswerable cases still
-fall back to saying the information isn't available. That's one run.
+What changed, and what the held-out cases said about it:
 
-**The run before** (`grounded_answer_v3`, no score gap): also 73/73, with
+- **`grounded_answer_v5`: answers name the docs they used.** Each context
+  passage carries its doc id, and the answer lists the ids it relies on.
+  Ids that weren't retrieved are dropped, so a made-up one can't become a
+  source. `/chat` returns the cited docs; the log keeps every retrieved
+  one. Live, "What is the refund policy?" had listed Invoices too; asked
+  now, "How do I get a refund?" cites refunds plus the account-deletion
+  caveat its answer actually mentions.
+- **`router_v4`: search queries keep to the user's own topics.** v3 had
+  searched "refund policy billing invoices" for "What is the refund
+  policy?".
+- **`grounded_answer_v6`: apply the rule; don't hedge or say "context".**
+  On a held-out case, v5 gave the rule (a password reset signs out all
+  other sessions) and then said "the context does not state whether" it
+  covered an intruder's session. v6 asks the model to apply the docs to
+  the user's situation and to speak as the support agent. The 11 cases
+  written before v6 mostly need a rule applied to a situation ("bought
+  annual 13 days ago: too late?"). All pass, none hedges or mentions
+  "context", and each cites exactly the doc it used (citation precision and
+  recall 100%).
+- **Gap 0.08 → 0.10**, after the held-out check (see "Score thresholds").
+  Context precision fell from 75% to 58%, the price of keeping the second
+  doc that two-doc answers need.
+
+**Before that**, with `grounded_answer_v4` and gap 0.08: 73/73, MRR 0.97,
+hit@1 95%, context precision 75%. `grounded_answer_v4` stopped the
+"I don't have enough information" opener on contradicted claims: every
+false premise and contradicted adversarial claim started with a plain "No".
+
+**The run before that** (`grounded_answer_v3`, no score gap): also 73/73, with
 MRR 0.95, hit@1 91% and context precision 34%. It was the first run with v3
 prompts, the 11-doc corpus and `judge_v2`, so it can't say which of the
 three moved a number:
@@ -304,6 +343,16 @@ cut the off-topic docs unanswerable questions still get from 3.0 to 1.2, but
 those already pass 6/6, and the floor would sit 0.017 from where it starts
 losing the right docs.
 
+The held-out check said 0.08 was too tight. These 12 cases were written
+after 0.08 was chosen, and `--collect --split held_out` scored them
+without tuning anything on them. On them, 0.08 drops a needed second doc:
+for `ho_unrecognized_signin`, `password-reset` (which says a reset signs out
+other sessions) scored 0.093 below the top doc. 0.10 loses nothing on
+either set, with context precision at 61% on dev and 56% on held-out
+(34–36% with no gap). Fixed floors fared worse: the highest lossless one
+was 0.66 on these cases but 0.597 on dev. So the live demo moved to
+`RETRIEVAL_MAX_SCORE_GAP=0.10`.
+
 The answer check reran the 49 cases a gap of 0.08 changes: 48/49, with 1.7
 docs per answer instead of 3.4 and context precision at 78%. The one failure,
 `multi_turn_false_premise_after_pushback`, answered "I don't have enough
@@ -317,7 +366,7 @@ single doc of context made it likelier. The live demo runs with
 fixed the fallback wording: with both, that case passes with "No, annual
 plans cannot be refunded for 60 days".
 
-**Before that** (5 docs, 65 cases, `router_v2` + `direct_answer_v2`,
+**Earlier still** (5 docs, 65 cases, `router_v2` + `direct_answer_v2`,
 `judge_v1`): 63/65 judge pass (97%), 100% retrieval recall.
 
 The v1 prompts (`router_v1`, `direct_answer_v1`) scored 56/59 on the

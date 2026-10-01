@@ -5,7 +5,7 @@ import pytest
 import app.eval.harness as harness
 import app.eval.judge as judge
 from app.agent.history import Turn
-from app.eval.dataset import CATEGORIES, EvalCase, load_golden_set
+from app.eval.dataset import CATEGORIES, SPLITS, EvalCase, load_golden_set
 from app.eval.judge import JudgeResult, JudgeVerdict
 from scripts.ingest import load_documents
 from tests.fakes import FakeGenerate, chunk, model_response
@@ -52,6 +52,13 @@ def test_golden_set_uses_known_categories_and_covers_all_of_them():
     assert {c.category for c in load_golden_set()} == CATEGORIES
 
 
+def test_every_case_is_in_a_known_split_and_held_out_ones_stand_alone():
+    cases = load_golden_set()
+    assert {c.split for c in cases} == SPLITS
+    held_out = [c for c in cases if c.split == "held_out"]
+    assert len(held_out) >= 10 and all(not c.history for c in held_out)
+
+
 def test_expected_doc_ids_exist_in_the_corpus():
     doc_ids = {d.doc_id for d in load_documents()}
     for case in load_golden_set():
@@ -82,6 +89,8 @@ _UNANSWERABLE_PATTERNS = {
     "unanswerable_phone_support": r"phone (number|support)|\bcall us\b|\+\d",
     "unanswerable_team_seats": r"\bseats?\b|up to \d+ (members|users|people)|\d+ (members|users) (per|max)",
     "unanswerable_upload_size": r"\b\d+\s?(kb|mb|gb)\b|file size|upload limit",
+    "ho_unanswerable_android": r"android|iphone|\bios\b|mobile app",
+    "h2_unanswerable_currency": r"\beuros?\b|currenc|\busd\b|\bgbp\b|dollar",
 }
 
 
@@ -253,3 +262,33 @@ async def test_a_failing_case_is_recorded_and_the_run_continues(fake_agent, monk
     # errored cases don't count as failures: the rate is over scored cases only
     assert report.judge_pass_rate == 1.0
     assert seen == [(0, "a"), (1, "b"), (2, "c")]
+
+
+async def test_citations_are_scored_against_the_expected_docs(fake_agent, monkeypatch):
+    async def run_agent(query, history=None):
+        return {"answer": "a", "sources": ["billing-refunds", "invoices-and-receipts"],
+                "retrieved_sources": ["billing-refunds", "invoices-and-receipts", "api-keys"],
+                "chunks": [chunk("billing-refunds"), chunk("invoices-and-receipts"), chunk("api-keys")]}
+
+    monkeypatch.setattr(harness, "run_agent", run_agent)
+
+    result = await harness.run_case(_case(expected=("billing-refunds", "account-deletion")))
+
+    # retrieval is still scored on what the search found
+    assert result.actual_sources == ["billing-refunds", "invoices-and-receipts", "api-keys"]
+    assert result.context_precision == pytest.approx(1 / 3)
+    assert result.cited_sources == ["billing-refunds", "invoices-and-receipts"]
+    assert (result.citation_precision, result.citation_recall) == (0.5, 0.5)
+
+
+async def test_an_answer_with_nothing_to_find_should_cite_nothing(fake_agent, monkeypatch):
+    async def run_agent(query, history=None):
+        return {"answer": "I don't have that information.", "sources": ["team-members"], "retrieved_sources": ["team-members"]}
+
+    monkeypatch.setattr(harness, "run_agent", run_agent)
+    report = harness.EvalReport(results=[
+        await harness.run_case(_case(id="seats", category="unanswerable", expected=())),
+    ])
+
+    assert report.results[0].citation_precision is None and report.results[0].citation_recall is None
+    assert report.spurious_citations() == ["seats"]

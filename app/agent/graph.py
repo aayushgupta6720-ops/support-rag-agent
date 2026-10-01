@@ -3,7 +3,7 @@ from typing import TypedDict
 
 from google.genai import types
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.agent.history import Turn, to_contents
 from app.agent.prompts import (
@@ -27,6 +27,12 @@ class AgentAnswer(BaseModel):
     answer: str
 
 
+class GroundedAnswer(AgentAnswer):
+    """An answer from retrieved docs, and which of them it relies on."""
+
+    sources: list[str] = Field(default_factory=list, description="ids of the docs the answer uses")
+
+
 class AgentState(TypedDict, total=False):
     query: str
     history: list[Turn]  # earlier turns of the conversation, oldest first
@@ -34,7 +40,8 @@ class AgentState(TypedDict, total=False):
     router_content: types.Content
     chunks: list[RetrievedChunk]
     answer: str
-    sources: list[str]
+    sources: list[str]  # the docs the answer says it used
+    retrieved_sources: list[str]  # one per chunk retrieved, best first
     router_prompt_version: str
     answer_prompt_version: str
 
@@ -102,30 +109,37 @@ async def _generate(state: AgentState) -> dict:
     if used_tool:
         system_instruction = GROUNDED_ANSWER_SYSTEM_PROMPT
         prompt_version = GROUNDED_ANSWER_PROMPT_VERSION
+        schema = GroundedAnswer
         if chunks:
-            context = "\n---\n".join(chunk.text for chunk in chunks)
+            # labelled, so the answer can say which docs it used
+            context = "\n---\n".join(f"[doc: {chunk.doc_id}]\n{chunk.text}" for chunk in chunks)
             prompt = f"Context from support docs:\n{context}\n\nQuestion: {state['query']}"
         else:
             prompt = f"No relevant support docs were found.\n\nQuestion: {state['query']}"
     else:
         system_instruction = DIRECT_ANSWER_SYSTEM_PROMPT
         prompt_version = DIRECT_ANSWER_PROMPT_VERSION
+        schema = AgentAnswer
         prompt = state["query"]
 
     with time_step("generate") as usage:
         response = await generate(
             prompt=prompt,
             system_instruction=system_instruction,
-            response_schema=AgentAnswer,
+            response_schema=schema,
             history=to_contents(state.get("history", [])),
         )
         _record_generation_usage(usage, response)
     parsed: AgentAnswer | None = response.parsed
     if parsed is None:  # blocked, or JSON that didn't match AgentAnswer
         raise ModelOutputError(_why_unusable(response))
+    retrieved = [chunk.doc_id for chunk in chunks]
+    # Only ids that were actually retrieved: a made-up one can't become a source.
+    cited = [doc_id for doc_id in dict.fromkeys(getattr(parsed, "sources", None) or []) if doc_id in retrieved]
     return {
         "answer": parsed.answer,
-        "sources": [chunk.doc_id for chunk in chunks],
+        "sources": cited,  # the docs the answer says it used
+        "retrieved_sources": retrieved,  # one per chunk retrieved, best first
         "answer_prompt_version": prompt_version,
     }
 

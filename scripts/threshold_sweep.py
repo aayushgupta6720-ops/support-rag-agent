@@ -59,6 +59,7 @@ async def collect(cases: list[EvalCase]) -> list[dict]:
         rows.append({
             "id": case.id,
             "category": case.category,
+            "split": case.split,
             "expected_doc_ids": case.expected_doc_ids,
             "search_query": state.get("search_query"),
             "retrieved": [(chunk.doc_id, chunk.score) for chunk in state.get("chunks") or []],
@@ -168,6 +169,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("file", nargs="?", type=Path, help="saved scores (default: the latest retrieval_*.json)")
     parser.add_argument("--collect", action="store_true", help="route and search each case, and save the scores")
+    parser.add_argument("--split", choices=["dev", "held_out"], help="with --collect, only this split's cases")
     parser.add_argument("--keep-top", action="store_true", help="never drop a case's top chunk")
     parser.add_argument("--changed", action="store_true", help="print the case ids --min-score/--gap change")
     parser.add_argument("--min-score", type=float, default=0.0, help="the floor to test with --changed")
@@ -175,7 +177,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     if args.collect:
-        cases = [case for case in load_golden_set() if _searches(case)]
+        cases = [case for case in load_golden_set() if _searches(case) and (not args.split or case.split == args.split)]
         rows = await collect(cases)
         settings = get_settings()
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)

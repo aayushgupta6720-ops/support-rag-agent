@@ -16,6 +16,7 @@ CATEGORIES = {
     "direct",  # greetings and small talk: no retrieval needed
     "multi_turn",  # a follow-up that only makes sense with the earlier turns
 }
+SPLITS = {"dev", "held_out"}
 
 
 @dataclass
@@ -28,6 +29,10 @@ class EvalCase:
     # Earlier turns, scripted rather than generated so every run asks the
     # follow-up in the same conversation: [{"role": "user"|"model", "text": ...}]
     history: list[dict] = field(default_factory=list)
+    # "dev": cases prompts and settings were tuned against. "held_out": cases
+    # written before a change and kept out of its tuning, to check it
+    # generalizes rather than fitting the dev cases.
+    split: str = "dev"
 
 
 def load_golden_set(path: Path = GOLDEN_SET_PATH) -> list[EvalCase]:

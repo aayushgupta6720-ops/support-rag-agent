@@ -54,6 +54,12 @@ class EvalCaseResult:
     # replay a score threshold offline.
     search_query: str | None = None
     retrieved: list[tuple[str, float]] = field(default_factory=list)
+    # The docs the answer says it used. Precision: the share of them that
+    # were expected (None if it cited none or the case expects none).
+    # Recall: the share of expected docs it cited (None if none expected).
+    cited_sources: list[str] = field(default_factory=list)
+    citation_precision: float | None = None
+    citation_recall: float | None = None
 
 
 @dataclass
@@ -102,6 +108,27 @@ class EvalReport:
     def context_precision(self) -> float:
         return self._mean("context_precision")
 
+    @property
+    def citation_precision(self) -> float:
+        return self._mean("citation_precision")
+
+    @property
+    def citation_recall(self) -> float:
+        return self._mean("citation_recall")
+
+    def spurious_citations(self) -> list[str]:
+        """Cases with nothing to find whose answer still cited a doc."""
+        return [r.case.id for r in self.results if not r.case.expected_doc_ids and r.cited_sources]
+
+    def pass_rate_by_split(self) -> dict[str, tuple[int, int]]:
+        """{split: (passed, total)}: held-out cases show whether a change
+        generalizes beyond the cases it was tuned on."""
+        by_split: dict[str, tuple[int, int]] = {}
+        for r in self.results:
+            passed, total = by_split.get(r.case.split, (0, 0))
+            by_split[r.case.split] = (passed + r.judge_correct, total + 1)
+        return by_split
+
     def pass_rate_by_category(self) -> dict[str, tuple[int, int]]:
         """{category: (passed, total)}, so one strong category can't hide a weak one."""
         by_category: dict[str, tuple[int, int]] = {}
@@ -115,8 +142,13 @@ async def run_case(case: EvalCase) -> EvalCaseResult:
     history = [Turn(**turn) for turn in case.history]
     result = await run_agent(case.query, history=history)
     actual_answer = result.get("answer", "")
-    actual_sources = result.get("sources", [])  # one per chunk, best first
+    # Retrieval is scored on what the search found, one entry per chunk.
+    actual_sources = result.get("retrieved_sources", result.get("sources", []))
     scores = score_retrieval(case.expected_doc_ids, actual_sources) if case.expected_doc_ids else None
+    cited = list(dict.fromkeys(result.get("sources", [])))
+    cited_expected = [doc_id for doc_id in cited if doc_id in case.expected_doc_ids]
+    citation_precision = len(cited_expected) / len(cited) if cited and case.expected_doc_ids else None
+    citation_recall = len(cited_expected) / len(case.expected_doc_ids) if case.expected_doc_ids else None
 
     verdict = await judge_answer(
         case.query,
@@ -139,6 +171,9 @@ async def run_case(case: EvalCase) -> EvalCaseResult:
         judge_votes=verdict.votes,
         search_query=result.get("search_query"),
         retrieved=[(chunk.doc_id, chunk.score) for chunk in result.get("chunks") or []],
+        cited_sources=cited,
+        citation_precision=citation_precision,
+        citation_recall=citation_recall,
     )
 
 

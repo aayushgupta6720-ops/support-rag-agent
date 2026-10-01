@@ -183,6 +183,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
         **_chat_text(request.query, result.get("search_query")),
         answer_length=len(answer),
         sources=sources,
+        retrieved_sources=result.get("retrieved_sources", []),
         used_tool="chunks" in result,
         num_chunks_retrieved=len(chunks),
         retrieval_scores=[round(chunk.score, 4) for chunk in chunks],
@@ -196,8 +197,6 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
 
     return ChatResponse(
         answer=answer,
-        # One entry per retrieved chunk, so a doc with two chunks in the top k
-        # was listed twice. The log line above keeps them per chunk.
         sources=list(dict.fromkeys(sources)),
         latency_ms=elapsed_ms,
         session_id=session_id,

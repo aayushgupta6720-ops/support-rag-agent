@@ -3,6 +3,7 @@
 Usage:
     python -m scripts.eval                      # every case
     python -m scripts.eval multi_turn greeting_1  # only these categories / case ids
+    python -m scripts.eval held_out             # only one split ("dev" or "held_out")
 """
 
 import asyncio
@@ -49,6 +50,14 @@ def print_report(report: EvalReport) -> None:
     print(f"MRR:                 {report.mrr:.2f}")
     print(f"Hit@1:               {report.hit_at_1:.0%}")
     print(f"Context precision:   {report.context_precision:.0%}")
+    print(f"Citation precision:  {report.citation_precision:.0%}")
+    print(f"Citation recall:     {report.citation_recall:.0%}")
+    spurious = report.spurious_citations()
+    print(f"Cited with nothing to find: {len(spurious)}" + (f" {spurious}" if spurious else ""))
+    print()
+    print("By split:")
+    for split, (passed, total) in sorted(report.pass_rate_by_split().items()):
+        print(f"  {split:<15} {passed}/{total}")
     print()
     print("By category:")
     for category, (passed, total) in sorted(report.pass_rate_by_category().items()):
@@ -97,6 +106,13 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
         "mrr": report.mrr,
         "hit_at_1": report.hit_at_1,
         "context_precision": report.context_precision,
+        "citation_precision": report.citation_precision,
+        "citation_recall": report.citation_recall,
+        "spurious_citations": report.spurious_citations(),
+        "by_split": {
+            split: {"passed": passed, "total": total}
+            for split, (passed, total) in sorted(report.pass_rate_by_split().items())
+        },
         "by_category": {
             category: {"passed": passed, "total": total}
             for category, (passed, total) in sorted(report.pass_rate_by_category().items())
@@ -106,6 +122,7 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
                 "id": r.case.id,
                 "query": r.case.query,
                 "category": r.case.category,
+                "split": r.case.split,
                 "expected_doc_ids": r.case.expected_doc_ids,
                 "actual_sources": r.actual_sources,
                 "retrieval_hit": r.retrieval_hit,
@@ -114,6 +131,9 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
                 "context_precision": r.context_precision,
                 "search_query": r.search_query,
                 "retrieved": r.retrieved,
+                "cited_sources": r.cited_sources,
+                "citation_precision": r.citation_precision,
+                "citation_recall": r.citation_recall,
                 "actual_answer": r.actual_answer,
                 "judge_correct": r.judge_correct,
                 "judge_votes": r.judge_votes,
@@ -133,7 +153,7 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
 async def main() -> None:
     cases = load_golden_set()
     if selected := set(sys.argv[1:]):
-        cases = [case for case in cases if case.id in selected or case.category in selected]
+        cases = [case for case in cases if selected & {case.id, case.category, case.split}]
         if not cases:
             sys.exit(f"No case ids or categories match {sorted(selected)}")
 
