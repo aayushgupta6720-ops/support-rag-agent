@@ -114,6 +114,11 @@ setup. The widget:
 - has thumbs up and down under each answer (see "Feedback" below);
 - shows a "still working" note on slow replies (a cold start on Render's
   free plan takes up to a minute);
+- says so when a follow-up was answered without the earlier messages. Each
+  response reports `history_turns`, and after 30 idle minutes the server
+  has forgotten the conversation even though the transcript still shows it;
+- says "one moment" if a topic card is clicked while an answer is coming,
+  instead of ignoring the click;
 - shows the API's own message for rate limits, quota and timeouts.
 
 Answers are built from text nodes, never HTML. The page's

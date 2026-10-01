@@ -232,6 +232,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
         latency_ms=elapsed_ms,
         session_id=session_id,
         answer_id=uuid.uuid4().hex,
+        history_turns=len(history),
     )
 
 

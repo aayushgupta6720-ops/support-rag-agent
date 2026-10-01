@@ -34,6 +34,10 @@ class ChatResponse(BaseModel):
     latency_ms: float
     session_id: str = Field(description="Send this back with the next question to continue the conversation.")
     answer_id: str = Field(description="Identifies this answer when rating it at POST /feedback.")
+    history_turns: int = Field(
+        description="How many earlier messages of the conversation this answer could see. 0 for a "
+        "follow-up means the session had expired (after 30 idle minutes) and it was answered on its own."
+    )
 
 
 class ArticleResponse(BaseModel):

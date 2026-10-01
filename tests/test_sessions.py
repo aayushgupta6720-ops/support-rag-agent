@@ -148,3 +148,17 @@ async def test_while_redis_is_down_sessions_are_kept_in_the_process(monkeypatch)
 
     assert await store.history("v|s") == [Turn("user", "q"), Turn("model", "a")]
     assert [e["event"] for e in events] == ["redis_unavailable"]  # logged once, not per call
+
+
+def test_each_answer_says_how_many_earlier_messages_it_could_see(agent, behind_render, monkeypatch):
+    # the widget compares this with its own transcript to spot an expired session
+    now = [0.0]
+    monkeypatch.setattr(app.state, "sessions", MemorySessionStore(max_exchanges=3, ttl_s=1800, clock=lambda: now[0]))
+    client = TestClient(app)
+    first = _ask(client, "How do I get a refund?").json()
+    assert first["history_turns"] == 0
+
+    assert _ask(client, "What about annual plans?", session_id=first["session_id"]).json()["history_turns"] == 2
+
+    now[0] = 1800.0 + 1  # idle past the TTL
+    assert _ask(client, "And monthly?", session_id=first["session_id"]).json()["history_turns"] == 0

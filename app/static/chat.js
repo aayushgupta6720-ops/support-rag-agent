@@ -280,11 +280,25 @@
     return "Something went wrong on our side (HTTP " + response.status + "). Please try again in a moment.";
   }
 
+  // A short note under the composer, read out by screen readers too.
+  let noteTimer = null;
+  function flashNote(text) {
+    counter.textContent = text;
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(updateComposer, 4000);
+  }
+
   async function send(text) {
     const query = text.trim();
-    if (!query || busy) return;
+    if (!query) return;
     openPanel();
+    if (busy) {  // a card or chip clicked while an answer is still coming
+      flashNote("One moment: I'm still answering your last question.");
+      return;
+    }
     closeArticle();
+    // Whether this is a follow-up in a conversation the server should remember.
+    const followUp = Boolean(state.sessionId) && state.messages.some((m) => m.role === "bot");
     busy = true;
     updateComposer();
     addMessage({ role: "user", text: query });
@@ -302,6 +316,15 @@
       if (response.ok) {
         const body = await response.json();
         state.sessionId = body.session_id || state.sessionId;
+        if (followUp && body.history_turns === 0) {
+          // The server forgot this conversation (idle too long), but the
+          // transcript still shows it: say so, rather than seem to remember.
+          addMessage({
+            role: "notice",
+            text: "This chat was idle for a while, so I answered without our earlier messages. " +
+              "If that was a follow-up, please include the details again.",
+          });
+        }
         addMessage({
           role: "bot", text: body.answer, sources: body.sources || [],
           answerId: body.answer_id, question: query,
