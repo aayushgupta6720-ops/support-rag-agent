@@ -55,6 +55,10 @@ def test_a_repeat_first_question_is_answered_from_the_cache_without_the_model(ag
     assert again["session_id"] != first["session_id"]  # still its own conversation
     assert [e["cache_hit"] for e in logged] == [False, True]
     assert (logged[1]["total_tokens"], logged[1]["answer_prompt_version"]) == (0, "grounded_answer_v4")
+    # still recorded as an answer from a search; nothing retrieved this time, so null, not 0
+    assert logged[1]["used_tool"] is True
+    assert logged[1]["num_chunks_retrieved"] is None and logged[1]["retrieval_scores"] is None
+    assert logged[0]["num_chunks_retrieved"] == 2  # the first, real run
 
 
 def test_a_follow_up_is_never_answered_from_the_cache(agent):

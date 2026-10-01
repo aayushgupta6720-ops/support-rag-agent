@@ -185,6 +185,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
             await cache.put(cache_key, {
                 "answer": result["answer"],
                 "sources": list(dict.fromkeys(result.get("sources", []))),
+                "used_tool": "chunks" in result,
                 "router_prompt_version": result.get("router_prompt_version"),
                 "answer_prompt_version": result.get("answer_prompt_version"),
             })
@@ -195,6 +196,19 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
     chunks = result.get("chunks") or []
     await sessions.add_exchange(session_key, request.query, answer)
 
+    # A cached answer still says whether it came from a search, but nothing
+    # was retrieved this time: null, not 0, so retrieval stats skip it.
+    retrieval = {
+        "used_tool": result.get("used_tool"),
+        "retrieved_sources": None,
+        "num_chunks_retrieved": None,
+        "retrieval_scores": None,
+    } if cache_hit else {
+        "used_tool": "chunks" in result,
+        "retrieved_sources": result.get("retrieved_sources", []),
+        "num_chunks_retrieved": len(chunks),
+        "retrieval_scores": [round(chunk.score, 4) for chunk in chunks],
+    }
     log_event(
         event="chat_call",
         session_id=session_id,
@@ -203,10 +217,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
         **_chat_text(request.query, result.get("search_query")),
         answer_length=len(answer),
         sources=sources,
-        retrieved_sources=result.get("retrieved_sources", []),
-        used_tool="chunks" in result,
-        num_chunks_retrieved=len(chunks),
-        retrieval_scores=[round(chunk.score, 4) for chunk in chunks],
+        **retrieval,
         router_prompt_version=result.get("router_prompt_version"),
         answer_prompt_version=result.get("answer_prompt_version"),
         latency_ms=elapsed_ms,
