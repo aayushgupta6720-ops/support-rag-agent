@@ -11,6 +11,7 @@ from app.api.ratelimit import client_key, rate_limit
 from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
+    ModelOutputError,
     ModelOverloadedError,
     ModelTimeoutError,
     RateLimitedError,
@@ -19,6 +20,7 @@ from app.core.gemini_client import (
 )
 from app.core.observability import log_event, start_trace
 from app.models.schemas import ChatRequest, ChatResponse, HealthResponse
+from app.rag.qdrant_store import SearchUnavailableError
 
 router = APIRouter()
 
@@ -37,16 +39,22 @@ def _in_about(seconds: float) -> str:
     return f"in about {minutes} minute{'s' if minutes != 1 else ''}"
 
 
-_GEMINI_UNAVAILABLE = (DailyQuotaExhaustedError, RateLimitedError, ModelOverloadedError, ModelTimeoutError)
+_HANDLED_ERRORS = (
+    DailyQuotaExhaustedError,
+    RateLimitedError,
+    ModelOverloadedError,
+    ModelTimeoutError,
+    ModelOutputError,
+    SearchUnavailableError,
+)
 
 
-def _gemini_unavailable_response(
-    exc: DailyQuotaExhaustedError | RateLimitedError | ModelOverloadedError | ModelTimeoutError,
-) -> JSONResponse:
-    """What /chat returns instead of a bare 500 when Gemini can't serve the
-    call: quota used up, the model overloaded, or no response in time. `detail` is written for a
-    person; Retry-After (and resets_at, for the daily quota) are for clients
-    that want to schedule a retry."""
+def _error_response(exc: Exception) -> JSONResponse:
+    """What /chat returns instead of a bare 500 when an answer can't be made:
+    Gemini's quota used up, the model overloaded, slow, or returning nothing
+    usable, or the search down. `detail` is written for a person (the chat
+    widget shows it as is); Retry-After (and resets_at, for the daily quota)
+    are for clients that want to schedule a retry."""
     if isinstance(exc, DailyQuotaExhaustedError):
         resets_at = next_daily_quota_reset()
         seconds = max(0.0, (resets_at - datetime.now(timezone.utc)).total_seconds())
@@ -72,11 +80,28 @@ def _gemini_unavailable_response(
             "a problem with your question). Try again in a minute."
         )
         return JSONResponse(status_code=503, content={"detail": detail}, headers={"Retry-After": "60"})
+    if isinstance(exc, ModelOutputError):
+        detail = "The assistant couldn't produce an answer to that one. Try rephrasing your question."
+        return JSONResponse(status_code=502, content={"detail": detail})
+    if isinstance(exc, SearchUnavailableError):
+        detail = (
+            "Searching the help articles failed just now (a temporary problem on our side). "
+            "Try again in a minute."
+        )
+        return JSONResponse(status_code=503, content={"detail": detail}, headers={"Retry-After": "30"})
     detail = (
         "The Gemini API is getting more requests than this demo's quota allows. "
         "Wait a minute and try again."
     )
     return JSONResponse(status_code=429, content={"detail": detail}, headers={"Retry-After": "60"})
+
+
+def _chat_text(query: str, search_query: str | None = None) -> dict:
+    """The question's text for the log line, only if LOG_CHAT_TEXT is on;
+    otherwise just its length."""
+    if get_settings().log_chat_text:
+        return {"query": query, "search_query": search_query}
+    return {"query_chars": len(query)}
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -114,14 +139,14 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
             event="chat_call",
             session_id=session_id,
             history_turns=len(history),
-            query=request.query,
+            **_chat_text(request.query),
             error=str(exc),
             error_type=type(exc).__name__,
             latency_ms=round((time.perf_counter() - start) * 1000, 2),
             steps=trace.as_dicts(),
         )
-        if isinstance(exc, _GEMINI_UNAVAILABLE):
-            return _gemini_unavailable_response(exc)
+        if isinstance(exc, _HANDLED_ERRORS):
+            return _error_response(exc)
         raise
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -134,11 +159,10 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
         event="chat_call",
         session_id=session_id,
         history_turns=len(history),
-        query=request.query,
+        **_chat_text(request.query, result.get("search_query")),
         answer_length=len(answer),
         sources=sources,
         used_tool="chunks" in result,
-        search_query=result.get("search_query"),
         num_chunks_retrieved=len(chunks),
         retrieval_scores=[round(chunk.score, 4) for chunk in chunks],
         router_prompt_version=result.get("router_prompt_version"),

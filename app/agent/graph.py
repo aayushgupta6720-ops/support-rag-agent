@@ -16,6 +16,7 @@ from app.agent.prompts import (
 )
 from app.agent.tools import SEARCH_DOCS_TOOL
 from app.core.config import get_settings
+from app.core.gemini_client import ModelOutputError
 from app.core.generation import generate
 from app.core.observability import time_step
 from app.core.pricing import generation_cost_usd
@@ -51,6 +52,16 @@ def _record_generation_usage(usage: dict, response: types.GenerateContentRespons
     )
 
 
+def _why_unusable(response: types.GenerateContentResponse) -> str:
+    """Why a response carried no usable output, for ModelOutputError."""
+    feedback = response.prompt_feedback
+    if feedback and feedback.block_reason:
+        return f"prompt blocked: {feedback.block_reason}"
+    if response.candidates and response.candidates[0].finish_reason:
+        return f"no usable output (finish reason {response.candidates[0].finish_reason})"
+    return "no usable output"
+
+
 async def _route(state: AgentState) -> dict:
     with time_step("route") as usage:
         response = await generate(
@@ -60,6 +71,9 @@ async def _route(state: AgentState) -> dict:
             history=to_contents(state.get("history", [])),
         )
         _record_generation_usage(usage, response)
+    # A blocked prompt comes back with no candidates rather than an error.
+    if not response.candidates or response.candidates[0].content is None:
+        raise ModelOutputError(_why_unusable(response))
     return {
         "router_content": response.candidates[0].content,
         "router_prompt_version": ROUTER_PROMPT_VERSION,
@@ -106,7 +120,9 @@ async def _generate(state: AgentState) -> dict:
             history=to_contents(state.get("history", [])),
         )
         _record_generation_usage(usage, response)
-    parsed: AgentAnswer = response.parsed
+    parsed: AgentAnswer | None = response.parsed
+    if parsed is None:  # blocked, or JSON that didn't match AgentAnswer
+        raise ModelOutputError(_why_unusable(response))
     return {
         "answer": parsed.answer,
         "sources": [chunk.doc_id for chunk in chunks],

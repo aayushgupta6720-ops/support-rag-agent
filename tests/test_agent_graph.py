@@ -1,4 +1,5 @@
 import pytest
+from google.genai import types
 
 import app.agent.graph as graph
 from app.agent.history import Turn
@@ -11,6 +12,7 @@ from app.agent.prompts import (
 )
 from app.agent.tools import SEARCH_DOCS_TOOL_NAME
 from app.core.config import get_settings
+from app.core.gemini_client import ModelOutputError
 from app.core.observability import start_trace
 from app.core.pricing import generation_cost_usd
 from tests.fakes import FakeGenerate, chunk, model_response
@@ -177,3 +179,21 @@ async def test_route_and_retrieve_stops_when_the_router_answers_directly(monkeyp
     state = await graph.route_and_retrieve("hello")
 
     assert retrieve_calls.queries == [] and "chunks" not in state
+
+
+async def test_a_blocked_question_is_a_model_output_error_not_a_crash(monkeypatch, retrieve_calls):
+    # a blocked prompt comes back with no candidates at all
+    blocked = types.GenerateContentResponse(
+        candidates=None, prompt_feedback=types.GenerateContentResponsePromptFeedback(block_reason="SAFETY"))
+    monkeypatch.setattr(graph, "generate", FakeGenerate([blocked]))
+
+    with pytest.raises(ModelOutputError, match="SAFETY"):
+        await graph.run_agent("something blocked")
+    assert retrieve_calls.queries == []
+
+
+async def test_an_answer_that_does_not_parse_is_a_model_output_error(monkeypatch, retrieve_calls):
+    monkeypatch.setattr(graph, "generate", FakeGenerate([model_response(), model_response(parsed=None)]))
+
+    with pytest.raises(ModelOutputError):
+        await graph.run_agent("hello")

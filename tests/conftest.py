@@ -26,6 +26,7 @@ def block_external_services(monkeypatch):
     # Likewise a RETRIEVAL_MIN_SCORE there must not change what tests retrieve.
     monkeypatch.setattr(get_settings(), "retrieval_min_score", 0.0)
     monkeypatch.setattr(get_settings(), "retrieval_max_score_gap", 0.0)
+    monkeypatch.setattr(get_settings(), "log_chat_text", False)
 
 
 @pytest.fixture(autouse=True)

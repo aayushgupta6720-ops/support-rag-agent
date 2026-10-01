@@ -4,6 +4,7 @@ import httpx
 import pytest
 from google.genai.errors import ClientError, ServerError
 from qdrant_client import AsyncQdrantClient
+from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
 import app.rag.embeddings as embeddings
 import app.rag.ingest as ingest
@@ -272,3 +273,22 @@ def test_embedding_errors_surface_daily_quota_distinctly(monkeypatch, error, exp
 
     with pytest.raises(expected):
         embeddings._embed_sync(["text"], "RETRIEVAL_QUERY")
+
+
+@pytest.mark.parametrize("error", [
+    ResponseHandlingException(httpx.ReadTimeout("timed out")),
+    UnexpectedResponse(503, "Service Unavailable", b"", httpx.Headers()),
+    httpx.ConnectError("connection refused"),
+], ids=["timeout", "http-503", "unreachable"])
+async def test_a_failed_search_is_reported_as_search_unavailable(monkeypatch, error):
+    class FailingClient:
+        async def collection_exists(self, name):
+            return True
+
+        async def query_points(self, **kwargs):
+            raise error
+
+    monkeypatch.setattr(qdrant_store, "get_client", lambda: FailingClient())
+
+    with pytest.raises(qdrant_store.SearchUnavailableError):
+        await qdrant_store.search([0.1], top_k=4)

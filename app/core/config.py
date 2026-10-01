@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # but they're lost on every restart, which on Render's free plan means
     # every time the service wakes up after sleeping.
     redis_url: str = ""
+    # Log visitors' questions (and the router's rewrite of them) in full.
+    # Off by default: a support chat collects personal details, so the log
+    # line records the question's length instead.
+    log_chat_text: bool = False
     # Multi-turn chat: how many earlier question-and-answer exchanges a
     # session keeps, and how long an idle session lasts.
     session_max_exchanges: int = 3

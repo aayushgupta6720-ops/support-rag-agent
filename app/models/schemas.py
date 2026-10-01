@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import BaseModel, Field, StringConstraints
 
 
 class HealthResponse(BaseModel):
@@ -10,8 +12,11 @@ class ChatRequest(BaseModel):
     # Each query goes to Gemini up to three times and into the logs, so an
     # unbounded one can use up the per-minute token quota for everyone. The
     # longest golden-set question is ~150 chars; this leaves room for a
-    # pasted error message.
-    query: str = Field(..., min_length=1, max_length=2000, description="User's question for the agent.")
+    # pasted error message. Surrounding whitespace is stripped first, so a
+    # whitespace-only query is refused instead of costing two model calls.
+    query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)] = Field(
+        ..., description="User's question for the agent."
+    )
     session_id: str | None = Field(
         default=None,
         max_length=64,

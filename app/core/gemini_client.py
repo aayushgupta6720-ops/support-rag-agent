@@ -64,8 +64,14 @@ class ModelOverloadedError(Exception):
 
 
 class ModelTimeoutError(Exception):
-    """A Gemini call got no response within gemini_timeout_s: usually a
-    Google-side slowdown rather than anything wrong with the call."""
+    """A Gemini call got no response within gemini_timeout_s, or Gemini gave
+    up itself (504 DEADLINE_EXCEEDED): usually a Google-side slowdown rather
+    than anything wrong with the call."""
+
+
+class ModelOutputError(Exception):
+    """Gemini answered, but with nothing usable: the prompt or the answer was
+    blocked (e.g. for safety), or the structured output didn't parse."""
 
 
 def call_gemini(call: Callable[[], T]) -> T:
@@ -74,7 +80,8 @@ def call_gemini(call: Callable[[], T]) -> T:
       with a short backoff and becomes ModelOverloadedError once the retries
       run out.
     - A call that times out becomes ModelTimeoutError straight away, since a
-      retry would double an already long wait.
+      retry would double an already long wait. So does Gemini's own 504,
+      which it sends when it gives up on a call before our timeout does.
     Other errors pass through. A retry that wouldn't fit the retry window
     gives up at once, as if the retries had run out."""
     for attempt in range(1, _MAX_OVERLOAD_ATTEMPTS + 1):
@@ -85,6 +92,8 @@ def call_gemini(call: Callable[[], T]) -> T:
                 f"no response from Gemini within {get_settings().gemini_timeout_s:g}s"
             ) from exc
         except ServerError as exc:
+            if exc.code == 504:
+                raise ModelTimeoutError(f"Gemini gave up on the call: {exc}") from exc
             if exc.code != 503:
                 raise
             delay = 2 ** (attempt - 1)

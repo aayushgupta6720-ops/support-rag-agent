@@ -441,6 +441,20 @@ after the MCP proxy had given up on it. Now a `/chat` ends within 45s plus
 all, inside the MCP proxy's 240s. The eval harness calls the agent
 directly, so it keeps retrying as before.
 
+Other failures get a clear status too, never a bare 500:
+
+- **Gemini gives up itself** (its own 504 DEADLINE_EXCEEDED): handled like
+  our timeout.
+- **Nothing usable comes back:** the question or the answer was blocked,
+  for example for safety, or the structured output didn't parse. That
+  returns a 502 asking the visitor to rephrase.
+- **The Qdrant search fails:** unreachable, erroring, or the collection
+  missing. That returns a 503 with `Retry-After: 30`.
+
+The `chat_call` log line records how long the question was, not its text,
+because a support chat collects personal details. Set `LOG_CHAT_TEXT=true`
+to log the question and the router's search query when debugging.
+
 **Limits:** the quota is shared by everyone using the demo, so each visitor
 (an IP address; for IPv6, its /64) can ask 6 questions a minute and 30 a
 day. Past that, `/chat` returns a 429 with `Retry-After` and a `detail`
@@ -455,7 +469,8 @@ requests can't slip past the limit. If Redis is unreachable, requests are
 counted in memory instead, still limited, rather than all refused or all
 let through. Without `REDIS_URL`, everything is in memory, and the
 Dockerfile pins one worker process so the counts aren't split. A `query` can be up
-to 2,000 characters and a request body up to 64 KB; a bigger body is
+to 2,000 characters (surrounding whitespace is stripped first, so a blank one
+is refused with a 422 instead of costing two model calls) and a request body up to 64 KB; a bigger body is
 refused with a 413 before it's read, since FastAPI otherwise reads and
 parses all of it first (a 52 MB body took the server from 134 to 419 MB).
 

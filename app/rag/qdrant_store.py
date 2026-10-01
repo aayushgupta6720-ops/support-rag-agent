@@ -1,6 +1,8 @@
 from functools import lru_cache
 
+import httpx
 from qdrant_client import AsyncQdrantClient
+from qdrant_client.http.exceptions import ApiException, ResponseHandlingException, UnexpectedResponse
 from qdrant_client.models import (
     Distance,
     FieldCondition,
@@ -22,6 +24,11 @@ _PAYLOAD_INDEXES = {
     "doc_id": PayloadSchemaType.KEYWORD,
     "chunk_index": PayloadSchemaType.INTEGER,
 }
+
+
+class SearchUnavailableError(Exception):
+    """Qdrant couldn't be searched: unreachable, erroring, or the collection
+    is missing. The question was fine; the search is down."""
 
 
 @lru_cache
@@ -92,10 +99,13 @@ async def _delete(points_filter: Filter) -> None:
 
 
 async def search(vector: list[float], top_k: int) -> list[ScoredPoint]:
-    await ensure_collection()
-    response = await get_client().query_points(
-        collection_name=get_settings().qdrant_collection,
-        query=vector,
-        limit=top_k,
-    )
+    try:
+        await ensure_collection()
+        response = await get_client().query_points(
+            collection_name=get_settings().qdrant_collection,
+            query=vector,
+            limit=top_k,
+        )
+    except (UnexpectedResponse, ResponseHandlingException, ApiException, httpx.HTTPError) as exc:
+        raise SearchUnavailableError(f"{type(exc).__name__}: {exc}") from exc
     return response.points

@@ -236,9 +236,10 @@ async def test_a_body_under_the_limit_reaches_the_app_intact_and_paths_can_have_
     assert (await _run({"max_bytes": 10, "max_bytes_by_path": {"/chat": 1000}}, [], [b"x" * 900]))[0] == 200
 
 
-def test_an_invalid_question_still_counts_so_the_readme_check_costs_no_quota(agent_calls, behind_render):
+@pytest.mark.parametrize("query", ["", "   \n "], ids=["empty", "whitespace"])
+def test_an_invalid_question_still_counts_so_the_readme_check_costs_no_quota(agent_calls, behind_render, query):
     # The README's post-deploy check relies on this: 422s that never reach the model, then a 429.
     client = TestClient(app)
-    codes = [client.post("/chat", json={"query": ""}, headers={"CF-Connecting-IP": "198.51.100.4"}).status_code
+    codes = [client.post("/chat", json={"query": query}, headers={"CF-Connecting-IP": "198.51.100.4"}).status_code
              for _ in range(7)]
     assert codes == [422] * 6 + [429] and agent_calls == []

@@ -2,12 +2,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api.routes as routes
+from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
+    ModelOutputError,
     ModelOverloadedError,
     ModelTimeoutError,
     RateLimitedError,
 )
+from app.rag.qdrant_store import SearchUnavailableError
 from app.core.observability import time_step
 from app.main import app
 from tests.fakes import chunk
@@ -165,3 +168,70 @@ def test_gemini_timeout_returns_504_saying_it_was_stopped(client, logged, monkey
 )
 def test_reset_time_reads_naturally(seconds, expected):
     assert routes._in_about(seconds) == expected
+
+
+def _failing_with(exc):
+    async def run_agent(query, history=None):
+        raise exc
+    return run_agent
+
+
+def test_a_search_outage_returns_503_saying_it_is_temporary(client, logged, monkeypatch):
+    monkeypatch.setattr(routes, "run_agent", _failing_with(SearchUnavailableError("ResponseHandlingException: timed out")))
+
+    response = client.post("/chat", json={"query": "anything"})
+
+    assert response.status_code == 503 and response.headers["Retry-After"] == "30"
+    assert "help articles failed" in response.json()["detail"]
+    assert "ResponseHandlingException" not in response.json()["detail"]
+    assert logged[0]["error_type"] == "SearchUnavailableError"
+
+
+def test_a_blocked_or_unparseable_answer_returns_502_asking_to_rephrase(client, logged, monkeypatch):
+    monkeypatch.setattr(routes, "run_agent", _failing_with(ModelOutputError("prompt blocked: SAFETY")))
+
+    response = client.post("/chat", json={"query": "anything"})
+
+    assert response.status_code == 502
+    assert "rephras" in response.json()["detail"]
+
+
+def _answering(search_query="reset link expiry"):
+    async def run_agent(query, history=None):
+        return {"answer": "30 minutes.", "sources": [], "search_query": search_query}
+    return run_agent
+
+
+def test_the_log_line_leaves_out_the_question_by_default(client, logged, monkeypatch):
+    monkeypatch.setattr(routes, "run_agent", _answering())
+
+    client.post("/chat", json={"query": "my email is me@example.com, reset link?"})
+
+    [event] = logged
+    assert "query" not in event and "search_query" not in event
+    assert event["query_chars"] == len("my email is me@example.com, reset link?")
+
+
+def test_log_chat_text_puts_the_question_and_search_query_in_the_log(client, logged, monkeypatch):
+    monkeypatch.setattr(get_settings(), "log_chat_text", True)
+    monkeypatch.setattr(routes, "run_agent", _answering())
+
+    client.post("/chat", json={"query": "how long is the reset link good for?"})
+
+    [event] = logged
+    assert event["query"] == "how long is the reset link good for?"
+    assert event["search_query"] == "reset link expiry"
+
+
+def test_surrounding_whitespace_is_stripped_before_the_agent_sees_the_question(client, logged, monkeypatch):
+    seen = []
+
+    async def run_agent(query, history=None):
+        seen.append(query)
+        return {"answer": "ok", "sources": []}
+
+    monkeypatch.setattr(routes, "run_agent", run_agent)
+
+    assert client.post("/chat", json={"query": "  reset password \n"}).status_code == 200
+    assert client.post("/chat", json={"query": " \n\t "}).status_code == 422
+    assert seen == ["reset password"]

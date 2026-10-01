@@ -300,3 +300,11 @@ async def test_earlier_turns_are_sent_before_the_latest_message(monkeypatch):
     assert [(c.role, c.parts[0].text) for c in sent["contents"]] == [
         ("user", "earlier question"), ("model", "earlier answer"), ("user", "latest"),
     ]
+
+
+def test_geminis_own_504_is_a_timeout_and_is_not_retried(client):
+    models, sleeps = client([ServerError(504, {"error": {"code": 504, "message": "Deadline expired", "status": "DEADLINE_EXCEEDED"}})])
+
+    with pytest.raises(ModelTimeoutError):
+        _call()
+    assert models.calls == 1 and sleeps == []
