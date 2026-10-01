@@ -141,3 +141,45 @@ async def test_while_redis_is_down_ratings_are_kept_in_the_process(logged):
 
     assert [r["answer_id"] for r in await store.newest()] == ["x"]
     assert [e["event"] for e in logged] == ["redis_unavailable"]
+
+
+# ---- a thumbs-down clears the cached answer -----------------------------------------------
+
+
+@pytest.fixture
+def answered(monkeypatch):
+    """A fake agent: each call returns a new answer, so a reused one shows up as a repeat."""
+    calls: list[str] = []
+
+    async def run_agent(query, history=None):
+        calls.append(query)
+        return {"answer": f"answer {len(calls)}", "sources": []}
+
+    monkeypatch.setattr(routes, "run_agent", run_agent)
+    monkeypatch.setattr(routes, "log_event", lambda **fields: None)
+    return calls
+
+
+def test_a_thumbs_down_clears_that_answer_from_the_cache(answered, logged):
+    client = TestClient(app)
+    first = client.post("/chat", json={"query": "How do refunds work?"}).json()
+    assert client.post("/chat", json={"query": "How do refunds work?"}).json()["answer"] == "answer 1"  # cached
+
+    client.post("/feedback", json=_rating(answer_id=first["answer_id"], question="How do refunds work?", answer="answer 1"))
+
+    assert client.post("/chat", json={"query": "How do refunds work?"}).json()["answer"] == "answer 2"  # asked afresh
+    assert logged[-1]["evicted_cached_answer"] is True
+
+
+@pytest.mark.parametrize("rating", [
+    {"rating": "up", "answer": "answer 1"},
+    {"rating": "down", "answer": "some other answer"},  # not the one in the cache: a made-up rating can't evict it
+], ids=["thumbs-up", "different-answer"])
+def test_other_ratings_leave_the_cache_alone(answered, logged, rating):
+    client = TestClient(app)
+    client.post("/chat", json={"query": "How do refunds work?"})
+
+    client.post("/feedback", json=_rating(question="How do refunds work?", **rating))
+
+    assert client.post("/chat", json={"query": "How do refunds work?"}).json()["answer"] == "answer 1"
+    assert logged[-1]["evicted_cached_answer"] is False

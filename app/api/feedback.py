@@ -14,6 +14,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from app.api.answer_cache import answer_cache_key
 from app.api.ratelimit import rate_limit
 from app.core.config import Settings, get_settings
 from app.core.observability import log_event
@@ -82,9 +83,27 @@ async def feedback(rating: FeedbackRequest, request: Request) -> Response:
     """Rate an answer from POST /chat, by its answer_id."""
     record = rating.model_dump() | {"received_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     await request.app.state.feedback.add(record)
+    evicted = rating.rating == "down" and await _evict_cached(request, rating)
     text = {"question": rating.question, "answer": rating.answer} if get_settings().log_chat_text else {}
-    log_event(event="feedback", answer_id=rating.answer_id, rating=rating.rating, sources=rating.sources, **text)
+    log_event(event="feedback", answer_id=rating.answer_id, rating=rating.rating, sources=rating.sources,
+              evicted_cached_answer=evicted, **text)
     return Response(status_code=204)
+
+
+async def _evict_cached(request: Request, rating: FeedbackRequest) -> bool:
+    """Drop a thumbs-down answer from the answer cache, so the next visitor
+    asking the same first question gets a fresh one instead of the same bad
+    answer for up to an hour. Only if the cache still holds exactly the rated
+    answer: a made-up rating can't evict a different one."""
+    cache = request.app.state.answer_cache
+    if cache is None:
+        return False
+    key = answer_cache_key(rating.question)
+    cached = await cache.get(key)
+    if not cached or cached.get("answer") != rating.answer:
+        return False
+    await cache.delete(key)
+    return True
 
 
 @router.get("/feedback/export", include_in_schema=False)

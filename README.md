@@ -166,6 +166,10 @@ Gemini calls.
 - **Privacy:** only a hash of the question is stored, never its text.
 - **Limits:** follow-ups are never cached. After re-ingesting changed docs,
   cached answers can lag for up to the TTL.
+- **Bad answers:** a thumbs-down on a cached answer removes it, so the next
+  visitor gets a fresh one rather than the same bad answer for up to an
+  hour. It only does this if the cache still holds exactly the rated
+  answer, so a made-up rating can't evict a different one.
 - **Where it lives:** the cache is in Redis when `REDIS_URL` is set,
   otherwise in memory. The log line says `cache_hit`.
 

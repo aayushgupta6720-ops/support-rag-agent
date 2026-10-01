@@ -174,3 +174,12 @@ async def test_while_redis_is_down_answers_are_cached_in_the_process(monkeypatch
 
     assert await store.get("k") == {"answer": "a"}
     assert [e["event"] for e in events] == ["redis_unavailable"]  # logged once, not per call
+
+
+async def test_a_store_can_delete_an_answer(store):
+    await store.put("k", {"answer": "a"})
+
+    await store.delete("k")
+
+    assert await store.get("k") is None
+    await store.delete("never-there")  # deleting a missing key is fine

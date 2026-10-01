@@ -67,6 +67,9 @@ class MemoryAnswerCache:
         while len(self._entries) > self.max_entries:
             self._entries.popitem(last=False)
 
+    async def delete(self, key: str) -> None:
+        self._entries.pop(key, None)
+
 
 class RedisAnswerCache:
     """Answers in Redis, expiring after the TTL. If Redis fails, the
@@ -97,6 +100,15 @@ class RedisAnswerCache:
         except RedisError as exc:
             self._failed(exc)
             await self._fallback.put(key, value)
+            return
+        self._redis_ok = True
+
+    async def delete(self, key: str) -> None:
+        await self._fallback.delete(key)  # it may hold a copy from a Redis outage
+        try:
+            await self._redis.delete(f"answer:{key}")
+        except RedisError as exc:
+            self._failed(exc)
             return
         self._redis_ok = True
 
