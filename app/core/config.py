@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,8 +50,9 @@ class Settings(BaseSettings):
     # line records the question's length instead.
     log_chat_text: bool = False
     # Multi-turn chat: how many earlier question-and-answer exchanges a
-    # session keeps, and how long an idle session lasts.
-    session_max_exchanges: int = 3
+    # session keeps, and how long an idle session lasts. At least 1: both
+    # stores trim to the last 2 x this many turns, and at 0 that keeps them all.
+    session_max_exchanges: int = Field(default=3, ge=1)
     session_ttl_s: int = 1800
     # How long the answer to a conversation's first question is reused for an
     # identical question (see app/api/answer_cache.py). 0 turns caching off.

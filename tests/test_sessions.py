@@ -3,12 +3,13 @@
 import fakeredis
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 import app.api.routes as routes
 import app.api.sessions as sessions
 from app.agent.history import Turn
 from app.api.sessions import MemorySessionStore, RedisSessionStore
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.main import app
 
 
@@ -94,6 +95,14 @@ def test_history_keeps_only_the_last_few_exchanges(agent, behind_render, monkeyp
         _ask(client, f"q{i}", session_id="s1")
 
     assert [t.text for t in agent[-1]] == ["q1", "answer 2", "q2", "answer 3"]
+
+
+@pytest.mark.parametrize("max_exchanges", [0, -1])
+def test_a_session_must_keep_at_least_one_exchange(max_exchanges):
+    # trimming to the last 0 turns ([-0:], LTRIM key 0 -1) kept every turn,
+    # so the app refuses to start rather than keep unbounded history
+    with pytest.raises(ValidationError, match="session_max_exchanges"):
+        Settings(_env_file=None, session_max_exchanges=max_exchanges)
 
 
 # ---- the stores --------------------------------------------------------------------------
