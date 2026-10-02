@@ -4,6 +4,7 @@ import httpx
 import pytest
 from google.genai.errors import ClientError, ServerError
 from qdrant_client import AsyncQdrantClient
+from qdrant_client.common.client_exceptions import ResourceExhaustedResponse
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
 import app.rag.embeddings as embeddings
@@ -279,7 +280,9 @@ def test_embedding_errors_surface_daily_quota_distinctly(monkeypatch, error, exp
     ResponseHandlingException(httpx.ReadTimeout("timed out")),
     UnexpectedResponse(503, "Service Unavailable", b"", httpx.Headers()),
     httpx.ConnectError("connection refused"),
-], ids=["timeout", "http-503", "unreachable"])
+    # a 429 with Retry-After, which qdrant-client raises as neither of its ApiExceptions
+    ResourceExhaustedResponse("Rate limiting exceeded: Read rate limit exceeded", 1),
+], ids=["timeout", "http-503", "unreachable", "rate-limited"])
 async def test_a_failed_search_is_reported_as_search_unavailable(monkeypatch, error):
     class FailingClient:
         async def collection_exists(self, name):

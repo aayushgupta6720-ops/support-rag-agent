@@ -2,6 +2,7 @@ from functools import lru_cache
 
 import httpx
 from qdrant_client import AsyncQdrantClient
+from qdrant_client.common.client_exceptions import QdrantException
 from qdrant_client.http.exceptions import ApiException, ResponseHandlingException, UnexpectedResponse
 from qdrant_client.models import (
     Distance,
@@ -29,6 +30,11 @@ _PAYLOAD_INDEXES = {
 class SearchUnavailableError(Exception):
     """Qdrant couldn't be searched: unreachable, erroring, or the collection
     is missing. The question was fine; the search is down."""
+
+
+# What a failed Qdrant request raises. A 429 that comes with Retry-After is
+# a QdrantException (ResourceExhaustedResponse), not one of the ApiExceptions.
+_QDRANT_ERRORS = (UnexpectedResponse, ResponseHandlingException, ApiException, QdrantException, httpx.HTTPError)
 
 
 @lru_cache
@@ -107,7 +113,7 @@ async def search(vector: list[float], top_k: int) -> list[ScoredPoint]:
             query=vector,
             limit=top_k,
         )
-    except (UnexpectedResponse, ResponseHandlingException, ApiException, httpx.HTTPError) as exc:
+    except _QDRANT_ERRORS as exc:
         raise SearchUnavailableError(f"{type(exc).__name__}: {exc}") from exc
     return response.points
 
@@ -120,6 +126,6 @@ async def check_search() -> int:
     await search([1.0] * get_settings().embedding_dim, top_k=1)
     try:
         result = await get_client().count(collection_name=get_settings().qdrant_collection, exact=True)
-    except (UnexpectedResponse, ResponseHandlingException, ApiException, httpx.HTTPError) as exc:
+    except _QDRANT_ERRORS as exc:
         raise SearchUnavailableError(f"{type(exc).__name__}: {exc}") from exc
     return result.count
