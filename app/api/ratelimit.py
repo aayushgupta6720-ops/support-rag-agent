@@ -21,6 +21,7 @@ from redis.exceptions import RedisError
 
 from app.core.config import Settings, get_settings
 from app.core.observability import log_event
+from app.core.redis_client import RedisOutage
 
 
 @dataclass(frozen=True)
@@ -116,18 +117,26 @@ class RedisRateLimiter:
     counted by the in-process `fallback` instead: still limited, just not
     shared, rather than either refusing everyone or letting everyone through."""
 
-    def __init__(self, fallback: RateLimiter, redis: Redis, clock: Callable[[], float] = time.time) -> None:
+    def __init__(
+        self,
+        fallback: RateLimiter,
+        redis: Redis,
+        clock: Callable[[], float] = time.time,
+        outage: RedisOutage | None = None,
+    ) -> None:
         self.what = fallback.what
         self.limits = fallback.limits
         self._fallback = fallback
         self._script = redis.register_script(_SLIDING_WINDOW)
         # Wall-clock time, unlike RateLimiter: the counts outlive the process.
         self._clock = clock
-        self._redis_ok = True
+        self._outage = outage or RedisOutage()
 
     async def hit(self, key: str) -> tuple[Limit, float] | None:
         if not self.limits:
             return None
+        if self._outage.skip():
+            return await self._fallback.hit(key)
         now = self._clock()
         args = [now, f"{now}:{secrets.token_hex(4)}"]
         for limit in self.limits:
@@ -135,17 +144,18 @@ class RedisRateLimiter:
         try:
             refused, wait = await self._script(keys=[f"ratelimit:{self.what}:{key}"], args=args)
         except RedisError as exc:
-            if self._redis_ok:  # once per outage, not once per request
+            if self._outage.failed():  # once per outage, not once per request
                 log_event(event="redis_unavailable", used_by="rate_limit", error=str(exc))
-            self._redis_ok = False
             return await self._fallback.hit(key)
-        self._redis_ok = True
+        self._outage.worked()
         if int(refused) == 0:
             return None
         return self.limits[int(refused) - 1], float(wait)
 
 
-def build_rate_limiters(settings: Settings, redis: Redis | None = None) -> dict[str, RateLimiter | RedisRateLimiter]:
+def build_rate_limiters(
+    settings: Settings, redis: Redis | None = None, outage: RedisOutage | None = None
+) -> dict[str, RateLimiter | RedisRateLimiter]:
     """One limiter per costly endpoint. A /chat call is up to three model
     calls: route, embed, generate. Each limiter counts under its own name
     (`what`) in Redis."""
@@ -160,7 +170,10 @@ def build_rate_limiters(settings: Settings, redis: Redis | None = None) -> dict[
     # needs one now and then, not a stream.
     search_check = RateLimiter("search checks", [Limit(6, 60, "a minute")])
     limiters = {"chat": chat, "feedback": feedback, "search_check": search_check}
-    return {name: RedisRateLimiter(limiter, redis) if redis else limiter for name, limiter in limiters.items()}
+    return {
+        name: RedisRateLimiter(limiter, redis, outage=outage) if redis else limiter
+        for name, limiter in limiters.items()
+    }
 
 
 _warned_missing_header = False

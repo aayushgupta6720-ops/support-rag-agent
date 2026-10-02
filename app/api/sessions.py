@@ -17,6 +17,7 @@ from redis.exceptions import RedisError
 from app.agent.history import Turn
 from app.core.config import Settings
 from app.core.observability import log_event
+from app.core.redis_client import RedisOutage
 
 
 class MemorySessionStore:
@@ -56,26 +57,30 @@ class RedisSessionStore:
     fails, the in-process `fallback` is used instead, so a Redis outage costs
     conversations their earlier turns rather than failing the request."""
 
-    def __init__(self, fallback: MemorySessionStore, redis: Redis) -> None:
+    def __init__(self, fallback: MemorySessionStore, redis: Redis, outage: RedisOutage | None = None) -> None:
         self._fallback = fallback
         self._redis = redis
-        self._redis_ok = True
+        self._outage = outage or RedisOutage()
 
     def _failed(self, exc: RedisError) -> None:
-        if self._redis_ok:  # once per outage, not once per request
+        if self._outage.failed():  # once per outage, not once per request
             log_event(event="redis_unavailable", used_by="sessions", error=str(exc))
-        self._redis_ok = False
 
     async def history(self, key: str) -> list[Turn]:
+        if self._outage.skip():
+            return await self._fallback.history(key)
         try:
             raw = await self._redis.lrange(f"session:{key}", 0, -1)
         except RedisError as exc:
             self._failed(exc)
             return await self._fallback.history(key)
-        self._redis_ok = True
+        self._outage.worked()
         return [Turn(**json.loads(item)) for item in raw]
 
     async def add_exchange(self, key: str, question: str, answer: str) -> None:
+        if self._outage.skip():
+            await self._fallback.add_exchange(key, question, answer)
+            return
         name = f"session:{key}"
         turns = [Turn("user", question), Turn("model", answer)]
         try:
@@ -88,9 +93,11 @@ class RedisSessionStore:
             self._failed(exc)
             await self._fallback.add_exchange(key, question, answer)
             return
-        self._redis_ok = True
+        self._outage.worked()
 
 
-def build_session_store(settings: Settings, redis: Redis | None = None) -> MemorySessionStore | RedisSessionStore:
+def build_session_store(
+    settings: Settings, redis: Redis | None = None, outage: RedisOutage | None = None
+) -> MemorySessionStore | RedisSessionStore:
     memory = MemorySessionStore(settings.session_max_exchanges, settings.session_ttl_s)
-    return RedisSessionStore(memory, redis) if redis else memory
+    return RedisSessionStore(memory, redis, outage) if redis else memory

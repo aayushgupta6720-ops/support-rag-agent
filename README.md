@@ -27,7 +27,7 @@ app/
   api/body_limit.py    Refuses oversized request bodies before they're read
   core/config.py       Settings, loaded from .env
   core/gemini_client.py Shared, cached google-genai client
-  core/redis_client.py Shared Redis client, when REDIS_URL is set
+  core/redis_client.py Shared Redis client (when REDIS_URL is set) and its outage switch
   models/schemas.py    Pydantic request/response models
   rag/
     chunking.py        Paragraph-packing text chunker with word-boundary overlap
@@ -603,7 +603,10 @@ sleep: with counts in memory, each wake-up handed every visitor a fresh
 allowance. The check and the count run as one Lua script, so simultaneous
 requests can't slip past the limit. If Redis is unreachable, requests are
 counted in memory instead, still limited, rather than all refused or all
-let through. Without `REDIS_URL`, everything is in memory, and the
+let through. After a Redis error, the limits, sessions, cache and ratings
+all stay in memory for 30s and then try Redis again, rather than each call
+waiting out a 2s timeout first: with Redis hanging, that added 10s to
+every `/chat`, and now only the first one waits. Without `REDIS_URL`, everything is in memory, and the
 Dockerfile pins one worker process so the counts aren't split. A `query` can be up
 to 2,000 characters (surrounding whitespace is stripped first, so a blank one
 is refused with a 422 instead of costing two model calls) and a request body up to 64 KB; a bigger body is

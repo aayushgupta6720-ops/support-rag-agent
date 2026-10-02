@@ -13,7 +13,7 @@ from app.api.routes import router
 from app.api.sessions import build_session_store
 from app.core.config import get_settings
 from app.core.observability import configure_logging, log_event
-from app.core.redis_client import get_redis
+from app.core.redis_client import RedisOutage, get_redis
 
 settings = get_settings()
 configure_logging()
@@ -30,10 +30,12 @@ app = FastAPI(
 app.include_router(router)
 app.include_router(feedback_router)
 redis = get_redis()
-app.state.rate_limiters = build_rate_limiters(settings, redis)
-app.state.sessions = build_session_store(settings, redis)
-app.state.answer_cache = build_answer_cache(settings, redis)
-app.state.feedback = build_feedback_store(settings, redis)
+# One for every store: once Redis fails for one, they all skip it for a while.
+redis_outage = RedisOutage()
+app.state.rate_limiters = build_rate_limiters(settings, redis, redis_outage)
+app.state.sessions = build_session_store(settings, redis, redis_outage)
+app.state.answer_cache = build_answer_cache(settings, redis, redis_outage)
+app.state.feedback = build_feedback_store(settings, redis, redis_outage)
 # Which store the rate limits and chat history use, to check after a deploy.
 log_event(event="state_store", backend="redis" if redis else "memory")
 # A /chat body is at most a few KB: 2,000 chars of query even fully escaped.
