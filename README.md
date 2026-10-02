@@ -562,12 +562,15 @@ messages through to the model, so it can tell the user why and when to retry.
 Gemini also has capacity spikes, answering 503 UNAVAILABLE ("high demand")
 even with quota to spare. Those are retried after 1s, 2s and 4s; if the model
 is still overloaded, `/chat` returns a 503 saying it's a temporary Google-side
-issue (`Retry-After: 60`) instead of a bare 500. A Gemini call that gets no
-response within `GEMINI_TIMEOUT_S` (60s) is stopped rather than left hanging,
-and `/chat` returns a 504 saying so. Retries only happen in a `/chat`'s
-first 45s: a retry whose wait would end later isn't made, and the 429 or
-503 above comes back straight away. Without that limit, Gemini's suggested
-waits (up to ~60s each) added up across the nested retries: four
+issue (`Retry-After: 60`) instead of a bare 500. Gemini's own 500 INTERNAL,
+which Google also says to retry, gets the same retries and, if it keeps
+coming, the same 503. So does a connection to Gemini that fails or drops
+partway, with a 503 saying the connection failed. A Gemini call that gets
+no response within `GEMINI_TIMEOUT_S` (60s) is stopped rather than left
+hanging, and `/chat` returns a 504 saying so. Retries only happen in a
+`/chat`'s first 45s: a retry whose wait would end later isn't made, and the
+429 or 503 above comes back straight away. Without that limit, Gemini's
+suggested waits (up to ~60s each) added up across the nested retries: four
 per-minute 429s in a row could keep a `/chat` going for 7 minutes, long
 after the MCP proxy had given up on it. Now a `/chat` ends within 45s plus
 60s for each of its three Gemini calls (route, embed, generate), 225s in

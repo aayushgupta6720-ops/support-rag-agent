@@ -1,6 +1,7 @@
 import contextvars
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from google.genai import types
@@ -15,7 +16,9 @@ from app.agent.graph import AgentAnswer
 from app.agent.tools import SEARCH_DOCS_TOOL_NAME
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
+    ModelConnectionError,
     ModelOverloadedError,
+    ModelServerError,
     ModelTimeoutError,
     RateLimitedError,
     is_daily_quota_error,
@@ -89,7 +92,7 @@ def test_gives_up_after_max_retries(client):
     "error",
     [
         ClientError(400, {"error": {"code": 400, "message": "bad request"}}),
-        ServerError(500, {"error": {"code": 500, "message": "boom"}}),
+        ServerError(501, {"error": {"code": 501, "message": "not implemented"}}),
     ],
 )
 def test_other_errors_are_not_retried(client, error):
@@ -164,9 +167,53 @@ def test_persistent_overload_becomes_model_overloaded_error(client):
     assert sleeps == [1, 2, 4]  # ~7s in all: long enough for a blip, not a spike
 
 
-def test_a_call_that_times_out_fails_fast_without_retrying(client):
-    import httpx
+def _internal_error() -> ServerError:
+    return ServerError(500, {"error": {"code": 500, "message": "An internal error has occurred.", "status": "INTERNAL"}})
 
+
+def test_internal_500_is_retried_like_an_overload(client):
+    models, sleeps = client([_internal_error(), "response"])
+
+    assert _call() == "response"
+    assert sleeps == [1]
+
+
+def test_persistent_500_becomes_model_server_error(client):
+    # its own error, so the log tells an internal error from an overload
+    models, sleeps = client([_internal_error()] * 4)
+
+    with pytest.raises(ModelServerError):
+        _call()
+    assert models.calls == 4
+    assert sleeps == [1, 2, 4]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        httpx.ConnectError("[Errno 61] Connection refused"),
+        httpx.RemoteProtocolError("Server disconnected without sending a response."),
+        httpx.ReadError("[Errno 54] Connection reset by peer"),
+    ],
+    ids=["unreachable", "disconnected", "reset"],
+)
+def test_a_dropped_connection_is_retried_like_an_overload(client, error):
+    models, sleeps = client([error, "response"])
+
+    assert _call() == "response"
+    assert sleeps == [1]
+
+
+def test_a_connection_that_keeps_failing_becomes_model_connection_error(client):
+    models, sleeps = client([httpx.RemoteProtocolError("Server disconnected")] * 4)
+
+    with pytest.raises(ModelConnectionError):
+        _call()
+    assert models.calls == 4
+    assert sleeps == [1, 2, 4]
+
+
+def test_a_call_that_times_out_fails_fast_without_retrying(client):
     models, sleeps = client([httpx.ReadTimeout("timed out"), "never reached"])
 
     with pytest.raises(ModelTimeoutError):
@@ -251,6 +298,8 @@ async def _no_chunks(vector, top_k):
 # Errors come back fast; answers as slowly as the 60s timeout allows.
 _429 = (1, rate_limited_error("59s", quota_id=PER_MINUTE))
 _503 = (1, _overloaded())
+_500 = (1, _internal_error())
+_DROPPED = (1, httpx.RemoteProtocolError("Server disconnected"))
 _ROUTED = (60, model_response(function_call=(SEARCH_DOCS_TOOL_NAME, {"query": "q"})))
 _EMBEDDED = (60, SimpleNamespace(embeddings=[SimpleNamespace(values=[0.0])], metadata=None))
 _ANSWERED = (60, model_response(parsed=AgentAnswer(answer="ok")))
@@ -264,6 +313,10 @@ _ANSWERED = (60, model_response(parsed=AgentAnswer(answer="ok")))
         # the loops nest: each 429 retry starts another round of 503 backoff
         pytest.param(([_503] * 3 + [_429]) * 4 + [_503] * 3 + [_ROUTED, _ANSWERED], [_EMBEDDED], 429,
                      id="503s-then-429s"),
+        # Gemini's own 500s on the route call, retried and then refused like an overload
+        pytest.param([_500] * 4, [_EMBEDDED], 503, id="persistent-500s"),
+        # the route call's connection keeps dropping
+        pytest.param([_DROPPED] * 4, [_EMBEDDED], 503, id="dropped-connections"),
         # the slowest answer that still gets through: a retry just inside the window, then three 60s calls
         pytest.param([(44, _overloaded()), _ROUTED, _ANSWERED], [_EMBEDDED], 200, id="slow-but-answered"),
     ],

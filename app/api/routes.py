@@ -14,8 +14,10 @@ from app.api.ratelimit import client_key, rate_limit
 from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
+    ModelConnectionError,
     ModelOutputError,
     ModelOverloadedError,
+    ModelServerError,
     ModelTimeoutError,
     RateLimitedError,
     next_daily_quota_reset,
@@ -29,7 +31,8 @@ from app.rag.qdrant_store import SearchUnavailableError, check_search
 
 router = APIRouter()
 
-# How long into a /chat its Gemini calls may still retry 429s and 503s.
+# How long into a /chat its Gemini calls may still retry 429s, 500s, 503s
+# and dropped connections.
 # After it, the next failure is returned as it comes, so a /chat ends within
 # this plus its three calls' gemini_timeout_s: 45 + 3 x 60 = 225s, inside
 # the MCP proxy's 240s with room for Qdrant. Change both together.
@@ -48,6 +51,8 @@ _HANDLED_ERRORS = (
     DailyQuotaExhaustedError,
     RateLimitedError,
     ModelOverloadedError,
+    ModelServerError,
+    ModelConnectionError,
     ModelTimeoutError,
     ModelOutputError,
     SearchUnavailableError,
@@ -56,10 +61,11 @@ _HANDLED_ERRORS = (
 
 def _error_response(exc: Exception) -> JSONResponse:
     """What /chat returns instead of a bare 500 when an answer can't be made:
-    Gemini's quota used up, the model overloaded, slow, or returning nothing
-    usable, or the search down. `detail` is written for a person (the chat
-    widget shows it as is); Retry-After (and resets_at, for the daily quota)
-    are for clients that want to schedule a retry."""
+    Gemini's quota used up, the model overloaded, erroring, unreachable,
+    slow, or returning nothing usable, or the search down. `detail` is
+    written for a person (the chat widget shows it as is); Retry-After (and
+    resets_at, for the daily quota) are for clients that want to schedule a
+    retry."""
     if isinstance(exc, DailyQuotaExhaustedError):
         resets_at = next_daily_quota_reset()
         seconds = max(0.0, (resets_at - datetime.now(timezone.utc)).total_seconds())
@@ -82,6 +88,18 @@ def _error_response(exc: Exception) -> JSONResponse:
     if isinstance(exc, ModelOverloadedError):
         detail = (
             "Gemini is overloaded right now (a temporary Google-side issue, not "
+            "a problem with your question). Try again in a minute."
+        )
+        return JSONResponse(status_code=503, content={"detail": detail}, headers={"Retry-After": "60"})
+    if isinstance(exc, ModelServerError):
+        detail = (
+            "Gemini had an internal error just now (a temporary Google-side issue, not "
+            "a problem with your question). Try again in a minute."
+        )
+        return JSONResponse(status_code=503, content={"detail": detail}, headers={"Retry-After": "60"})
+    if isinstance(exc, ModelConnectionError):
+        detail = (
+            "The connection to Gemini failed just now (a temporary network problem, not "
             "a problem with your question). Try again in a minute."
         )
         return JSONResponse(status_code=503, content={"detail": detail}, headers={"Retry-After": "60"})

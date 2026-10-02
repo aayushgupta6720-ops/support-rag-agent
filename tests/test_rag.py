@@ -13,7 +13,14 @@ import app.rag.qdrant_store as qdrant_store
 import app.rag.retrieval as retrieval
 import scripts.ingest as ingest_script
 from app.core.config import get_settings
-from app.core.gemini_client import DailyQuotaExhaustedError, ModelOverloadedError, ModelTimeoutError, RateLimitedError
+from app.core.gemini_client import (
+    DailyQuotaExhaustedError,
+    ModelConnectionError,
+    ModelOverloadedError,
+    ModelServerError,
+    ModelTimeoutError,
+    RateLimitedError,
+)
 from app.core.observability import start_trace
 from app.core.pricing import embedding_cost_usd
 from tests.fakes import DAILY, PER_MINUTE, rate_limited_error
@@ -260,6 +267,8 @@ def test_loader_moves_the_h1_heading_into_the_title(tmp_path, monkeypatch):
         (rate_limited_error(quota_id=DAILY), DailyQuotaExhaustedError),
         (rate_limited_error(quota_id=PER_MINUTE), RateLimitedError),
         (ServerError(503, {"error": {"code": 503, "message": "high demand"}}), ModelOverloadedError),
+        (ServerError(500, {"error": {"code": 500, "message": "internal error"}}), ModelServerError),
+        (httpx.ConnectError("connection refused"), ModelConnectionError),
         (httpx.ReadTimeout("timed out"), ModelTimeoutError),
         (ClientError(400, {"error": {"code": 400, "message": "bad"}}), ClientError),
     ],
@@ -270,7 +279,7 @@ def test_embedding_errors_surface_daily_quota_distinctly(monkeypatch, error, exp
 
     fake_client = SimpleNamespace(models=SimpleNamespace(embed_content=embed_content))
     monkeypatch.setattr(embeddings, "get_gemini_client", lambda: fake_client)
-    monkeypatch.setattr("time.sleep", lambda seconds: None)  # the 503 case backs off
+    monkeypatch.setattr("time.sleep", lambda seconds: None)  # the 5xx and connection cases back off
 
     with pytest.raises(expected):
         embeddings._embed_sync(["text"], "RETRIEVAL_QUERY")

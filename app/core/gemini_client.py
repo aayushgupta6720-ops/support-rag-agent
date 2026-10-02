@@ -15,7 +15,9 @@ from app.core.config import get_settings
 
 _PACIFIC = ZoneInfo("America/Los_Angeles")
 # A 503 "high demand" usually clears within seconds to minutes: retry a few
-# times (1s, 2s, 4s) rather than make a user wait out a long spike.
+# times (1s, 2s, 4s) rather than make a user wait out a long spike. A 500
+# INTERNAL, which Google also says to retry, and a dropped connection get
+# the same backoff.
 _MAX_OVERLOAD_ATTEMPTS = 4
 
 T = TypeVar("T")
@@ -63,6 +65,16 @@ class ModelOverloadedError(Exception):
     retries: a Google-side capacity spike, not anything wrong with the call."""
 
 
+class ModelServerError(Exception):
+    """Gemini kept answering 500 INTERNAL past our retries: an unexpected
+    error on Google's side, not anything wrong with the call."""
+
+
+class ModelConnectionError(Exception):
+    """Gemini couldn't be reached, or dropped the connection mid-call, past
+    our retries: a network problem, not anything wrong with the call."""
+
+
 class ModelTimeoutError(Exception):
     """A Gemini call got no response within gemini_timeout_s, or Gemini gave
     up itself (504 DEADLINE_EXCEEDED): usually a Google-side slowdown rather
@@ -76,9 +88,10 @@ class ModelOutputError(Exception):
 
 def call_gemini(call: Callable[[], T]) -> T:
     """call(), with Gemini's transient failures handled:
-    - 503 UNAVAILABLE, which Google says is usually temporary, is retried
-      with a short backoff and becomes ModelOverloadedError once the retries
-      run out.
+    - 503 UNAVAILABLE and 500 INTERNAL, which Google says are usually
+      temporary, and a failed or dropped connection are retried with a
+      short backoff. Once the retries run out they become
+      ModelOverloadedError, ModelServerError or ModelConnectionError.
     - A call that times out becomes ModelTimeoutError straight away, since a
       retry would double an already long wait. So does Gemini's own 504,
       which it sends when it gives up on a call before our timeout does.
@@ -91,15 +104,19 @@ def call_gemini(call: Callable[[], T]) -> T:
             raise ModelTimeoutError(
                 f"no response from Gemini within {get_settings().gemini_timeout_s:g}s"
             ) from exc
+        # the SDK makes no retries of its own and lets these through as is
+        except (httpx.NetworkError, httpx.RemoteProtocolError) as exc:
+            error, cause = ModelConnectionError, exc
         except ServerError as exc:
             if exc.code == 504:
                 raise ModelTimeoutError(f"Gemini gave up on the call: {exc}") from exc
-            if exc.code != 503:
+            if exc.code not in (500, 503):
                 raise
-            delay = 2 ** (attempt - 1)
-            if attempt == _MAX_OVERLOAD_ATTEMPTS or not fits_retry_window(delay):
-                raise ModelOverloadedError(str(exc)) from exc
-            time.sleep(delay)
+            error, cause = (ModelOverloadedError if exc.code == 503 else ModelServerError), exc
+        delay = 2 ** (attempt - 1)
+        if attempt == _MAX_OVERLOAD_ATTEMPTS or not fits_retry_window(delay):
+            raise error(str(cause)) from cause
+        time.sleep(delay)
     raise AssertionError("unreachable")
 
 

@@ -5,8 +5,10 @@ import app.api.routes as routes
 from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
+    ModelConnectionError,
     ModelOutputError,
     ModelOverloadedError,
+    ModelServerError,
     ModelTimeoutError,
     RateLimitedError,
 )
@@ -146,6 +148,37 @@ def test_overloaded_model_returns_503_saying_it_is_temporary(client, logged, mon
     assert response.headers["Retry-After"] == "60"
     [event] = logged
     assert event["error_type"] == "ModelOverloadedError"
+
+
+def test_gemini_internal_error_returns_503_saying_it_is_temporary(client, logged, monkeypatch):
+    async def internal_error(query, history=None):
+        raise ModelServerError("500 INTERNAL. {'error': {...}}")
+
+    monkeypatch.setattr(routes, "run_agent", internal_error)
+
+    response = client.post("/chat", json={"query": "anything"})
+
+    assert response.status_code == 503
+    assert "Gemini had an internal error" in response.json()["detail"]
+    assert "INTERNAL" not in response.json()["detail"]
+    assert response.headers["Retry-After"] == "60"
+    [event] = logged
+    assert event["error_type"] == "ModelServerError"
+
+
+def test_a_failed_gemini_connection_returns_503_saying_it_is_temporary(client, logged, monkeypatch):
+    async def disconnected(query, history=None):
+        raise ModelConnectionError("Server disconnected without sending a response.")
+
+    monkeypatch.setattr(routes, "run_agent", disconnected)
+
+    response = client.post("/chat", json={"query": "anything"})
+
+    assert response.status_code == 503
+    assert "The connection to Gemini failed" in response.json()["detail"]
+    assert response.headers["Retry-After"] == "60"
+    [event] = logged
+    assert event["error_type"] == "ModelConnectionError"
 
 
 def test_gemini_timeout_returns_504_saying_it_was_stopped(client, logged, monkeypatch):
