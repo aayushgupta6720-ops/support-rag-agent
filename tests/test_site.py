@@ -69,3 +69,11 @@ def test_the_widget_links_sources_to_articles_and_can_rate_answers():
     widget = TestClient(app).get("/static/chat.js").text
     assert '"/articles/" + encodeURIComponent(docId)' in widget
     assert 'fetch("/feedback"' in widget
+
+
+def test_a_question_in_the_hero_box_is_kept_while_an_answer_is_coming():
+    # send() turns it away while busy ("One moment..."), so emptying the box
+    # first lost the question; the chat composer already keeps its text
+    widget = TestClient(app).get("/static/chat.js").text
+    hero_submit = widget.split('$("hero-ask").addEventListener("submit"', 1)[1].split("});", 1)[0]
+    assert 'if (!busy) box.value = "";' in hero_submit

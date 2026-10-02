@@ -421,7 +421,7 @@
     event.preventDefault();
     const box = $("hero-input");
     const text = box.value;
-    box.value = "";
+    if (!busy) box.value = "";  // while an answer is coming, send() won't take it: keep it to ask next
     send(text);
   });
   document.querySelectorAll("[data-ask]").forEach((button) => {
