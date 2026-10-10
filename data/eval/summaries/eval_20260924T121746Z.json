@@ -1,0 +1,51 @@
+{
+  "judge_pass_rate": 0.953125,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "by_category": {
+    "adversarial": {
+      "passed": 7,
+      "total": 7
+    },
+    "direct": {
+      "passed": 5,
+      "total": 6
+    },
+    "false_premise": {
+      "passed": 6,
+      "total": 6
+    },
+    "grounded": {
+      "passed": 21,
+      "total": 22
+    },
+    "multi_doc": {
+      "passed": 5,
+      "total": 5
+    },
+    "out_of_scope": {
+      "passed": 3,
+      "total": 4
+    },
+    "reasoning": {
+      "passed": 5,
+      "total": 5
+    },
+    "robustness": {
+      "passed": 3,
+      "total": 3
+    },
+    "unanswerable": {
+      "passed": 6,
+      "total": 6
+    }
+  },
+  "failed": [
+    "rate_limit_1",
+    "greeting_1",
+    "out_of_scope_cover_letter"
+  ],
+  "errored": [
+    "two_factor_supported_apps"
+  ]
+}

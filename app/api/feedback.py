@@ -1,9 +1,14 @@
 """Visitors' ratings of answers: a thumbs up or down from the chat widget.
 
-A rating saves the rated question and answer, which the visitor's own browser
-sends and only when they choose to rate. That is what makes it useful: a
-thumbs-down is a real question the agent got wrong, a candidate for the eval
-set (scripts/feedback_candidates.py). Nothing identifies the visitor."""
+A rating saves the rated question and answer, and only when the visitor
+chooses to rate. That is what makes it useful: a thumbs-down is a real
+question the agent got wrong, a candidate for the eval set
+(scripts/feedback_candidates.py). Nothing identifies the visitor.
+
+The text comes from the server's own record of the answer it gave, kept for a
+day under its answer_id, not from the request: the widget used to send the
+question and answer, so anyone could post made-up pairs that became draft eval
+cases. An answer can be rated once."""
 
 import json
 import secrets
@@ -14,7 +19,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from app.api.answer_cache import answer_cache_key
+from app.api.answer_cache import MemoryAnswerCache, RedisAnswerCache, answer_cache_key
 from app.api.ratelimit import rate_limit
 from app.core.config import Settings, get_settings
 from app.core.observability import log_event
@@ -22,6 +27,8 @@ from app.core.redis_client import RedisOutage
 from app.models.schemas import FeedbackRequest
 
 MAX_KEPT = 2000  # the newest ratings kept; older ones are dropped
+ISSUED_TTL_S = 24 * 3600  # how long an answer can be rated
+MAX_ISSUED = 5000  # answers remembered in the process (without Redis)
 
 router = APIRouter()
 
@@ -78,6 +85,14 @@ class RedisFeedbackStore:
         return [json.loads(item) for item in raw] + await self._fallback.newest()
 
 
+def build_issued_answers(
+    settings: Settings, redis: Redis | None = None, outage: RedisOutage | None = None
+) -> MemoryAnswerCache | RedisAnswerCache:
+    """The answers /chat gave in the last day, by answer_id: what a rating rates."""
+    memory = MemoryAnswerCache(ISSUED_TTL_S, max_entries=MAX_ISSUED)
+    return RedisAnswerCache(memory, redis, outage, prefix="issued:") if redis else memory
+
+
 def build_feedback_store(
     settings: Settings, redis: Redis | None = None, outage: RedisOutage | None = None
 ) -> MemoryFeedbackStore | RedisFeedbackStore:
@@ -87,27 +102,37 @@ def build_feedback_store(
 
 @router.post("/feedback", status_code=204, dependencies=[rate_limit("feedback")])
 async def feedback(rating: FeedbackRequest, request: Request) -> Response:
-    """Rate an answer from POST /chat, by its answer_id."""
-    record = rating.model_dump() | {"received_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    """Rate an answer from POST /chat, by its answer_id. The question, answer
+    and sources are the server's record of that answer; any the request sends
+    are ignored."""
+    issued = request.app.state.issued_answers
+    answered = await issued.get(rating.answer_id)
+    if answered is None:
+        raise HTTPException(
+            status_code=404, detail="That answer isn't one this server gave in the last day, or it's been rated already."
+        )
+    await issued.delete(rating.answer_id)  # one rating per answer
+    record = {"answer_id": rating.answer_id, "rating": rating.rating, **answered,
+              "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     await request.app.state.feedback.add(record)
-    evicted = rating.rating == "down" and await _evict_cached(request, rating)
-    text = {"question": rating.question, "answer": rating.answer} if get_settings().log_chat_text else {}
-    log_event(event="feedback", answer_id=rating.answer_id, rating=rating.rating, sources=rating.sources,
+    evicted = rating.rating == "down" and await _evict_cached(request, answered)
+    text = {"question": answered["question"], "answer": answered["answer"]} if get_settings().log_chat_text else {}
+    log_event(event="feedback", answer_id=rating.answer_id, rating=rating.rating, sources=answered["sources"],
               evicted_cached_answer=evicted, **text)
     return Response(status_code=204)
 
 
-async def _evict_cached(request: Request, rating: FeedbackRequest) -> bool:
+async def _evict_cached(request: Request, answered: dict) -> bool:
     """Drop a thumbs-down answer from the answer cache, so the next visitor
     asking the same first question gets a fresh one instead of the same bad
     answer for up to an hour. Only if the cache still holds exactly the rated
-    answer: a made-up rating can't evict a different one."""
+    answer, not a newer one."""
     cache = request.app.state.answer_cache
     if cache is None:
         return False
-    key = answer_cache_key(rating.question)
+    key = answer_cache_key(answered["question"])
     cached = await cache.get(key)
-    if not cached or cached.get("answer") != rating.answer:
+    if not cached or cached.get("answer") != answered["answer"]:
         return False
     await cache.delete(key)
     return True

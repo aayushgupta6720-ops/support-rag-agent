@@ -245,12 +245,17 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
         steps=trace.as_dicts(),
     )
 
+    answer_id = uuid.uuid4().hex
+    # What a rating of this answer will rate (app/api/feedback.py).
+    await http_request.app.state.issued_answers.put(
+        answer_id, {"question": request.query, "answer": answer, "sources": list(dict.fromkeys(sources))}
+    )
     return ChatResponse(
         answer=answer,
         sources=list(dict.fromkeys(sources)),
         latency_ms=elapsed_ms,
         session_id=session_id,
-        answer_id=uuid.uuid4().hex,
+        answer_id=answer_id,
         history_turns=len(history),
     )
 

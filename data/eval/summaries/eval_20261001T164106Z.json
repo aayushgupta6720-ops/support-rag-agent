@@ -1,0 +1,52 @@
+{
+  "run": {
+    "git_commit": "022e2d5-dirty",
+    "generation_model": "gemini-flash-lite-latest",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "corpus_docs": 11,
+    "router_prompt": "router_v4",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v6",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 11
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.8833333333333334,
+  "hit_at_1": 0.8,
+  "context_precision": 0.4583333333333333,
+  "citation_precision": 1.0,
+  "citation_recall": 1.0,
+  "spurious_citations": [],
+  "by_split": {
+    "held_out": {
+      "passed": 11,
+      "total": 11
+    }
+  },
+  "by_category": {
+    "false_premise": {
+      "passed": 1,
+      "total": 1
+    },
+    "grounded": {
+      "passed": 1,
+      "total": 1
+    },
+    "reasoning": {
+      "passed": 8,
+      "total": 8
+    },
+    "unanswerable": {
+      "passed": 1,
+      "total": 1
+    }
+  },
+  "failed": [],
+  "errored": []
+}

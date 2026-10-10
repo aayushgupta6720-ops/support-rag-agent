@@ -1,0 +1,8 @@
+{
+  "judge_pass_rate": 0.9230769230769231,
+  "retrieval_hit_rate": 1.0,
+  "failed": [
+    "two_factor_setup"
+  ],
+  "errored": []
+}

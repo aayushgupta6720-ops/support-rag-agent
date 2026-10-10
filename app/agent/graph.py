@@ -17,9 +17,8 @@ from app.agent.prompts import (
 from app.agent.tools import SEARCH_DOCS_TOOL
 from app.core.config import get_settings
 from app.core.gemini_client import ModelOutputError
-from app.core.generation import generate
+from app.core.generation import generate, record_usage
 from app.core.observability import time_step
-from app.core.pricing import generation_cost_usd
 from app.rag.retrieval import RetrievedChunk, retrieve
 
 
@@ -46,19 +45,6 @@ class AgentState(TypedDict, total=False):
     answer_prompt_version: str
 
 
-def _record_generation_usage(usage: dict, response: types.GenerateContentResponse) -> None:
-    metadata = response.usage_metadata
-    if metadata is None:
-        return
-    usage["input_tokens"] = metadata.prompt_token_count or 0
-    usage["output_tokens"] = (metadata.candidates_token_count or 0) + (
-        metadata.thoughts_token_count or 0
-    )
-    usage["cost_usd"] = generation_cost_usd(
-        get_settings().generation_model, usage["input_tokens"], usage["output_tokens"]
-    )
-
-
 def _why_unusable(response: types.GenerateContentResponse) -> str:
     """Why a response carried no usable output, for ModelOutputError."""
     feedback = response.prompt_feedback
@@ -77,7 +63,7 @@ async def _route(state: AgentState) -> dict:
             tools=[SEARCH_DOCS_TOOL],
             history=to_contents(state.get("history", [])),
         )
-        _record_generation_usage(usage, response)
+        record_usage(usage, response)
     # A blocked prompt comes back with no candidates rather than an error.
     if not response.candidates or response.candidates[0].content is None:
         raise ModelOutputError(_why_unusable(response))
@@ -129,7 +115,7 @@ async def _generate(state: AgentState) -> dict:
             response_schema=schema,
             history=to_contents(state.get("history", [])),
         )
-        _record_generation_usage(usage, response)
+        record_usage(usage, response)
     parsed: AgentAnswer | None = response.parsed
     if parsed is None:  # blocked, or JSON that didn't match AgentAnswer
         raise ModelOutputError(_why_unusable(response))

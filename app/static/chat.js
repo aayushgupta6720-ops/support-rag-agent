@@ -172,10 +172,8 @@
       const response = await fetch("/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          answer_id: message.answerId, rating: rating,
-          question: message.question, answer: message.text, sources: message.sources || [],
-        }),
+        // The server rates its own record of the answer, so only the id goes.
+        body: JSON.stringify({ answer_id: message.answerId, rating: rating }),
       });
       if (!response.ok) throw new Error("HTTP " + response.status);
       message.rated = rating;

@@ -7,6 +7,7 @@ from google.genai.errors import ClientError
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.core.pricing import generation_cost_usd
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
     RateLimitedError,
@@ -83,4 +84,18 @@ async def generate(
         system_instruction=system_instruction,
         tools=tools,
         response_schema=response_schema,
+    )
+
+
+def record_usage(usage: dict, response: types.GenerateContentResponse) -> None:
+    """Fill a time_step's usage dict from a response: tokens (thinking counted as output) and cost."""
+    metadata = response.usage_metadata
+    if metadata is None:
+        return
+    usage["input_tokens"] = metadata.prompt_token_count or 0
+    usage["output_tokens"] = (metadata.candidates_token_count or 0) + (
+        metadata.thoughts_token_count or 0
+    )
+    usage["cost_usd"] = generation_cost_usd(
+        get_settings().generation_model, usage["input_tokens"], usage["output_tokens"]
     )

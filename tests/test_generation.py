@@ -237,7 +237,18 @@ def test_gemini_client_is_built_with_the_configured_timeout(monkeypatch):
 
 # ---- a whole /chat vs the MCP proxy's timeout --------------------------------------------
 
-_MCP_PROXY_TIMEOUT_S = 240  # mcp_server/server.py
+def _mcp_proxy_timeout_s() -> float:
+    """TIMEOUT_S in mcp_server/server.py, read from its source: the module
+    imports the mcp package, which lives in the proxy's own venv."""
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse((Path(__file__).resolve().parent.parent / "mcp_server" / "server.py").read_text())
+    [value] = [n.value.value for n in tree.body if isinstance(n, ast.Assign) and n.targets[0].id == "TIMEOUT_S"]
+    return value
+
+
+_MCP_PROXY_TIMEOUT_S = _mcp_proxy_timeout_s()
 
 
 class _FakeClock:

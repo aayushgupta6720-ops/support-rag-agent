@@ -4,10 +4,18 @@ Usage:
     python -m scripts.eval                      # every case
     python -m scripts.eval multi_turn greeting_1  # only these categories / case ids
     python -m scripts.eval held_out             # only one split ("dev" or "held_out")
+    python -m scripts.eval --any-settings ...   # run even if retrieval settings differ from render.yaml's
+
+A run uses the deployed retrieval settings (render.yaml's RETRIEVAL_* values),
+or stops: on 2026-10-10 three runs went out with a local score gap of 0 against
+the demo's 0.10, so their numbers didn't describe the deployed agent. Full
+results go to data/eval/results/ (gitignored); a summary of each run goes to
+data/eval/summaries/, which is committed.
 """
 
 import asyncio
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -23,7 +31,23 @@ from app.eval.judge import MAX_VOTES  # noqa: E402
 from app.eval.prompts import JUDGE_PROMPT_VERSION  # noqa: E402
 from scripts.ingest import load_documents  # noqa: E402
 
-RESULTS_DIR = Path(__file__).resolve().parent.parent / "data" / "eval" / "results"
+ROOT = Path(__file__).resolve().parent.parent
+RESULTS_DIR = ROOT / "data" / "eval" / "results"
+SUMMARIES_DIR = ROOT / "data" / "eval" / "summaries"
+# Settings that change which chunks an answer sees, compared with the deployed ones.
+DEPLOYED_SETTINGS = ("RETRIEVAL_MAX_SCORE_GAP", "RETRIEVAL_MIN_SCORE", "RETRIEVAL_TOP_K")
+
+
+def settings_differing_from_render() -> dict[str, tuple[float, float]]:
+    """{setting: (here, render.yaml)} for each deployed retrieval setting that differs."""
+    blueprint = (ROOT / "render.yaml").read_text()
+    deployed = dict(re.findall(r'- key: (RETRIEVAL_\w+)\s+value: "?([0-9.]+)"?', blueprint))
+    settings = get_settings()
+    differing = {}
+    for name in DEPLOYED_SETTINGS:
+        if name in deployed and float(getattr(settings, name.lower())) != float(deployed[name]):
+            differing[name] = (float(getattr(settings, name.lower())), float(deployed[name]))
+    return differing
 
 
 def print_report(report: EvalReport) -> None:
@@ -90,6 +114,7 @@ def run_metadata(case_ids: list[str]) -> dict:
         "judge_prompt": JUDGE_PROMPT_VERSION,
         "judge_max_votes": MAX_VOTES,
         "cases": len(case_ids),
+        "settings_match_render": not settings_differing_from_render(),
     }
 
 
@@ -109,6 +134,8 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
         "citation_precision": report.citation_precision,
         "citation_recall": report.citation_recall,
         "spurious_citations": report.spurious_citations(),
+        "cost_usd": report.cost_usd,
+        "model_requests": report.model_requests,
         "by_split": {
             split: {"passed": passed, "total": total}
             for split, (passed, total) in sorted(report.pass_rate_by_split().items())
@@ -150,9 +177,30 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
     return path
 
 
+def save_summary(path: Path) -> Path:
+    """The run without its answers: what produced it, the rates, what it cost,
+    and which cases failed or errored. Committed, so the numbers in the README
+    can be traced to a run."""
+    full = json.loads(path.read_text())
+    summary = {key: value for key, value in full.items() if key not in ("results", "errors")}
+    summary["failed"] = [r["id"] for r in full["results"] if not r["judge_correct"]]
+    summary["errored"] = [e["id"] for e in full.get("errors", [])]
+    SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
+    out = SUMMARIES_DIR / path.name
+    out.write_text(json.dumps(summary, indent=2) + "\n")
+    return out
+
+
 async def main() -> None:
+    args = sys.argv[1:]
+    differing = settings_differing_from_render()
+    if differing and "--any-settings" not in args:
+        lines = [f"  {name}: {here} here, {deployed} in render.yaml" for name, (here, deployed) in differing.items()]
+        fix = " ".join(f"{name}={deployed}" for name, (_, deployed) in differing.items())
+        sys.exit("Retrieval settings differ from the deployed ones:\n" + "\n".join(lines)
+                 + f"\nRun with {fix}, or pass --any-settings to run anyway.")
     cases = load_golden_set()
-    if selected := set(sys.argv[1:]):
+    if selected := {arg for arg in args if not arg.startswith("--")}:
         cases = [case for case in cases if selected & {case.id, case.category, case.split}]
         if not cases:
             sys.exit(f"No case ids or categories match {sorted(selected)}")
@@ -165,7 +213,10 @@ async def main() -> None:
     print()
     print_report(report)
     path = save_report(report, run_metadata([case.id for case in cases]))
-    print(f"\nSaved results to {path}")
+    print(f"\nSaved results to {path}, summary to {save_summary(path)}")
+    cost = report.cost_usd
+    print(f"{report.model_requests} chat-model requests; on a paid key ${cost['total']:.4f} "
+          f"(agent ${cost['agent']:.4f}, judge ${cost['judge']:.4f})")
 
 
 if __name__ == "__main__":

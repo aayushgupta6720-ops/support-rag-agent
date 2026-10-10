@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from app.agent.graph import run_agent
 from app.agent.history import Turn
 from app.eval.dataset import EvalCase
+from app.core.observability import start_trace
 from app.eval.judge import judge_answer
 
 
@@ -29,6 +30,10 @@ def score_retrieval(expected_doc_ids: list[str], sources: list[str]) -> Retrieva
         reciprocal_rank=1 / min(ranks) if ranks else 0.0,
         context_precision=relevant / len(retrieved_docs) if retrieved_docs else 0.0,
     )
+
+
+# Trace steps that are a chat-model request (embedding calls are another quota).
+MODEL_STEPS = {"route", "generate", "judge"}
 
 
 @dataclass
@@ -60,6 +65,11 @@ class EvalCaseResult:
     cited_sources: list[str] = field(default_factory=list)
     citation_precision: float | None = None
     citation_recall: float | None = None
+    # What the case cost: the agent's model calls and the judge's, from the
+    # trace (the judge used to go unrecorded, though it's about a third of a run).
+    agent_cost_usd: float = 0.0
+    judge_cost_usd: float = 0.0
+    model_requests: int = 0
 
 
 @dataclass
@@ -116,6 +126,17 @@ class EvalReport:
     def citation_recall(self) -> float:
         return self._mean("citation_recall")
 
+    @property
+    def cost_usd(self) -> dict[str, float]:
+        """What the run would have cost on a paid key: the agent's calls and the judge's."""
+        agent = sum(r.agent_cost_usd for r in self.results)
+        judge = sum(r.judge_cost_usd for r in self.results)
+        return {"agent": round(agent, 6), "judge": round(judge, 6), "total": round(agent + judge, 6)}
+
+    @property
+    def model_requests(self) -> int:
+        return sum(r.model_requests for r in self.results)
+
     def spurious_citations(self) -> list[str]:
         """Cases with nothing to find whose answer still cited a doc."""
         return [r.case.id for r in self.results if not r.case.expected_doc_ids and r.cited_sources]
@@ -139,6 +160,7 @@ class EvalReport:
 
 
 async def run_case(case: EvalCase) -> EvalCaseResult:
+    trace = start_trace()
     history = [Turn(**turn) for turn in case.history]
     result = await run_agent(case.query, history=history)
     actual_answer = result.get("answer", "")
@@ -174,6 +196,9 @@ async def run_case(case: EvalCase) -> EvalCaseResult:
         cited_sources=cited,
         citation_precision=citation_precision,
         citation_recall=citation_recall,
+        agent_cost_usd=round(sum(s.cost_usd for s in trace.steps if s.name != "judge"), 8),
+        judge_cost_usd=round(sum(s.cost_usd for s in trace.steps if s.name == "judge"), 8),
+        model_requests=sum(s.name in MODEL_STEPS for s in trace.steps),
     )
 
 

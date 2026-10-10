@@ -1,0 +1,67 @@
+{
+  "run": {
+    "git_commit": "94b48c1-dirty",
+    "generation_model": "gemini-flash-lite-latest",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.08,
+    "corpus_docs": 11,
+    "router_prompt": "router_v3",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v4",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 73
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.9727272727272728,
+  "hit_at_1": 0.9454545454545454,
+  "context_precision": 0.7515151515151516,
+  "by_category": {
+    "adversarial": {
+      "passed": 7,
+      "total": 7
+    },
+    "direct": {
+      "passed": 6,
+      "total": 6
+    },
+    "false_premise": {
+      "passed": 6,
+      "total": 6
+    },
+    "grounded": {
+      "passed": 23,
+      "total": 23
+    },
+    "multi_doc": {
+      "passed": 5,
+      "total": 5
+    },
+    "multi_turn": {
+      "passed": 8,
+      "total": 8
+    },
+    "out_of_scope": {
+      "passed": 4,
+      "total": 4
+    },
+    "reasoning": {
+      "passed": 5,
+      "total": 5
+    },
+    "robustness": {
+      "passed": 3,
+      "total": 3
+    },
+    "unanswerable": {
+      "passed": 6,
+      "total": 6
+    }
+  },
+  "failed": [],
+  "errored": []
+}

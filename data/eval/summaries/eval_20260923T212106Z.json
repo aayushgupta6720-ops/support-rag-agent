@@ -1,0 +1,49 @@
+{
+  "judge_pass_rate": 0.9491525423728814,
+  "retrieval_hit_rate": 0.9782608695652174,
+  "retrieval_recall": 0.9782608695652174,
+  "by_category": {
+    "adversarial": {
+      "passed": 4,
+      "total": 5
+    },
+    "direct": {
+      "passed": 3,
+      "total": 4
+    },
+    "false_premise": {
+      "passed": 6,
+      "total": 6
+    },
+    "grounded": {
+      "passed": 23,
+      "total": 23
+    },
+    "multi_doc": {
+      "passed": 5,
+      "total": 5
+    },
+    "out_of_scope": {
+      "passed": 1,
+      "total": 2
+    },
+    "reasoning": {
+      "passed": 5,
+      "total": 5
+    },
+    "robustness": {
+      "passed": 3,
+      "total": 3
+    },
+    "unanswerable": {
+      "passed": 6,
+      "total": 6
+    }
+  },
+  "failed": [
+    "out_of_scope_trivia",
+    "adversarial_injection_refund",
+    "direct_capabilities"
+  ],
+  "errored": []
+}

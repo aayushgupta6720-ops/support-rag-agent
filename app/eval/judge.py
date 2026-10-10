@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from app.agent.history import Turn
-from app.core.generation import generate
+from app.core.generation import generate, record_usage
+from app.core.observability import time_step
 from app.eval.prompts import JUDGE_SYSTEM_PROMPT
 
 # One verdict is noisy: the same answer text has been graded both ways on
@@ -52,7 +53,10 @@ async def judge_answer(
     majority = MAX_VOTES // 2 + 1
     votes: list[JudgeVerdict] = []
     while True:
-        response = await generate(prompt=prompt, system_instruction=JUDGE_SYSTEM_PROMPT, response_schema=JudgeVerdict)
+        # Traced like the agent's calls, so an eval's cost includes its judging.
+        with time_step("judge", vote=len(votes) + 1) as usage:
+            response = await generate(prompt=prompt, system_instruction=JUDGE_SYSTEM_PROMPT, response_schema=JudgeVerdict)
+            record_usage(usage, response)
         votes.append(response.parsed)
         passes = sum(vote.correct for vote in votes)
         if votes[0].correct or passes >= majority or len(votes) - passes >= majority:

@@ -1,0 +1,94 @@
+{
+  "run": {
+    "git_commit": "022e2d5-dirty",
+    "generation_model": "gemini-flash-lite-latest",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "corpus_docs": 11,
+    "router_prompt": "router_v4",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v6",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 86
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.9711538461538461,
+  "hit_at_1": 0.9423076923076923,
+  "context_precision": 0.5769230769230769,
+  "citation_precision": 0.9326923076923077,
+  "citation_recall": 0.9903846153846154,
+  "spurious_citations": [],
+  "by_split": {
+    "dev": {
+      "passed": 69,
+      "total": 69
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 7,
+      "total": 7
+    },
+    "direct": {
+      "passed": 6,
+      "total": 6
+    },
+    "false_premise": {
+      "passed": 6,
+      "total": 6
+    },
+    "grounded": {
+      "passed": 23,
+      "total": 23
+    },
+    "multi_doc": {
+      "passed": 5,
+      "total": 5
+    },
+    "multi_turn": {
+      "passed": 4,
+      "total": 4
+    },
+    "out_of_scope": {
+      "passed": 4,
+      "total": 4
+    },
+    "reasoning": {
+      "passed": 5,
+      "total": 5
+    },
+    "robustness": {
+      "passed": 3,
+      "total": 3
+    },
+    "unanswerable": {
+      "passed": 6,
+      "total": 6
+    }
+  },
+  "failed": [],
+  "errored": [
+    "multi_turn_reset_link_expiry",
+    "multi_turn_topic_switch_2fa_disable",
+    "multi_turn_false_premise_after_pushback",
+    "multi_turn_thanks",
+    "ho_export_link_expiry",
+    "ho_lockout_support_unlock",
+    "ho_invoice_vat_past",
+    "ho_revoked_key_response",
+    "ho_transfer_to_member",
+    "ho_disable_signin_alerts",
+    "ho_show_key_again",
+    "ho_export_before_deleting",
+    "ho_unrecognized_signin",
+    "ho_unanswerable_android",
+    "ho_typo_2fa_no_codes",
+    "ho_admin_delete_org",
+    "ho_out_of_scope_laptop"
+  ]
+}

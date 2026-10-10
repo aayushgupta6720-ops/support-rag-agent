@@ -128,10 +128,14 @@ phones, follows the system's dark mode, and works with the keyboard alone
 (Enter sends, Shift+Enter starts a new line, Escape closes).
 
 **Feedback.** Every response has an `answer_id`, and the widget's thumbs
-post it to `POST /feedback` with the rated question and answer. Only the
-visitor's own chat sends those, and only when they choose to rate, so a
-rating is the one place a question gets stored. Ratings have their own
-rate limit (20 a minute, 100 a day), and the newest 2,000 are kept in Redis.
+post it to `POST /feedback`. The server keeps its own record of each answer
+it gave (question, answer, sources) for a day under that id, and a rating
+stores that record, so a rating is the one place a question gets stored. The
+widget used to send the question and answer itself, which let anyone post
+made-up pairs that became draft eval cases; now an id the server didn't
+issue in the last day gets a 404, any text the request sends is ignored, and
+each answer can be rated once. Ratings have their own rate limit (20 a
+minute, 100 a day), and the newest 2,000 are kept in Redis.
 
 `GET /feedback/export` returns them. It needs `FEEDBACK_EXPORT_TOKEN` as a
 bearer token, and doesn't exist without one. `python -m
@@ -260,16 +264,25 @@ this few cases per category, treat a single run as a smoke signal, not a
 benchmark: one flipped case moves a category by 20+ points.
 
 **`grounded_answer_v7` (current).** `multi_doc_downgrade_rate_limit`, asked
-what a failed payment does to the API rate limit, had started failing 4/4
-with "I don't have enough information", though one article says the account
-is downgraded to the free tier and another gives that tier's limit. v7 says
-to put facts from different articles together, and drops v6's worked
-example (a 14-day refund, a purchase 10 days ago), which matched the
-held-out case `h2_annual_refund_day_13`. Its first run passed all 44 cases
-it reached, including all 7 `multi_doc` ones; the eval key's daily quota ran
-out before the rest, so the full run, held-out split included, is still to
-come. The model is now pinned to `gemini-3.5-flash-lite` rather than the
-alias `gemini-flash-lite-latest`, which Google can move.
+what a failed payment does to the API rate limit, failed 4/4 with "I don't
+have enough information", though one article says the account is downgraded
+to the free tier and another gives that tier's limit; the same call with
+those articles as fixed context failed 3/3 too. v7 says to put facts from
+different articles together, and drops v6's worked example (a 14-day refund,
+a purchase 10 days ago), which matched the held-out case
+`h2_annual_refund_day_13`. A caveat on everything measured on 2026-10-10:
+those runs used a score gap of 0, while the deployed agent uses 0.10, so
+they don't describe it. The eval now refuses to run with settings that
+differ from `render.yaml`'s. Under those settings v6 passed the 18 `h3_*`
+cases and v7 the 44 cases it reached before the eval key's daily quota ran
+out (all 7 `multi_doc` ones); both need re-running at 0.10, and the full v7
+run is still to come. The model is now pinned to `gemini-3.5-flash-lite`
+rather than the alias `gemini-flash-lite-latest`, which Google can move.
+
+Each run's summary (settings, rates, cost, failed and errored cases) is
+committed under `data/eval/summaries/`; the full answers stay in the
+gitignored `data/eval/results/`. Since 2026-10-10 the summary includes what
+the run would have cost on a paid key, judge included.
 
 **Latest full run** (`gemini-flash-lite-latest`, 97 cases, `router_v4`,
 `direct_answer_v3`, `grounded_answer_v6`, `judge_v2`,

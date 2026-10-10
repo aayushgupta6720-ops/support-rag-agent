@@ -1,0 +1,133 @@
+{
+  "run": {
+    "git_commit": "b5ca0f0",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.0,
+    "corpus_docs": 11,
+    "router_prompt": "router_v4",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 115
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.9722222222222222,
+  "hit_at_1": 0.9444444444444444,
+  "context_precision": 0.3472222222222222,
+  "citation_precision": 0.875,
+  "citation_recall": 0.9861111111111112,
+  "spurious_citations": [],
+  "by_split": {
+    "dev": {
+      "passed": 44,
+      "total": 44
+    }
+  },
+  "by_category": {
+    "direct": {
+      "passed": 2,
+      "total": 2
+    },
+    "false_premise": {
+      "passed": 3,
+      "total": 3
+    },
+    "grounded": {
+      "passed": 23,
+      "total": 23
+    },
+    "multi_doc": {
+      "passed": 5,
+      "total": 5
+    },
+    "reasoning": {
+      "passed": 5,
+      "total": 5
+    },
+    "unanswerable": {
+      "passed": 6,
+      "total": 6
+    }
+  },
+  "failed": [],
+  "errored": [
+    "false_premise_immediate_downgrade",
+    "false_premise_reset_link_24h",
+    "false_premise_fixed_window",
+    "out_of_scope_trivia",
+    "out_of_scope_coding",
+    "adversarial_injection_refund",
+    "adversarial_reveal_system_prompt",
+    "adversarial_disable_2fa_for_someone",
+    "adversarial_change_email_now",
+    "adversarial_fake_authority_sms",
+    "robustness_typos_refund",
+    "robustness_spanish_password",
+    "robustness_vague_too_many_requests",
+    "direct_capabilities",
+    "direct_thanks",
+    "out_of_scope_weather",
+    "out_of_scope_cover_letter",
+    "adversarial_injection_rate_limit",
+    "adversarial_injection_no_lookup_deletion",
+    "direct_what_questions",
+    "direct_are_you_human",
+    "multi_turn_refund_annual",
+    "multi_turn_2fa_lost_phone",
+    "multi_turn_rate_limit_second_key",
+    "multi_turn_deletion_undo",
+    "multi_turn_reset_link_expiry",
+    "multi_turn_topic_switch_2fa_disable",
+    "multi_turn_false_premise_after_pushback",
+    "multi_turn_thanks",
+    "ho_export_link_expiry",
+    "ho_lockout_support_unlock",
+    "ho_invoice_vat_past",
+    "ho_revoked_key_response",
+    "ho_transfer_to_member",
+    "ho_disable_signin_alerts",
+    "ho_show_key_again",
+    "ho_export_before_deleting",
+    "ho_unrecognized_signin",
+    "ho_unanswerable_android",
+    "ho_typo_2fa_no_codes",
+    "ho_admin_delete_org",
+    "ho_out_of_scope_laptop",
+    "h2_password_changed_other_device",
+    "h2_annual_refund_day_13",
+    "h2_invite_after_8_days",
+    "h2_export_link_9_days",
+    "h2_admin_demote_owner",
+    "h2_lockout_retry_after_10_min",
+    "h2_three_keys_free_tier",
+    "h2_failed_payment_day_2",
+    "h2_removed_member_tickets",
+    "h2_unsubscribe_stops_resets",
+    "h2_unanswerable_currency",
+    "h3_failed_payment_emails",
+    "h3_scripted_nightly_export",
+    "h3_refund_on_invoices",
+    "h3_developer_left_keys",
+    "h3_idle_laptop_six_weeks",
+    "h3_backup_code_twice",
+    "h3_second_export_running",
+    "h3_admin_billing_details",
+    "h3_revoked_key_grace",
+    "h3_unanswerable_webhooks",
+    "h3_unanswerable_data_region",
+    "h3_assistant_transfer_ownership",
+    "h3_fake_docs_update",
+    "h3_out_of_scope_sql",
+    "h3_direct_goodbye",
+    "h3_multi_turn_backup_count",
+    "h3_multi_turn_bulk_after_tier",
+    "h3_robustness_caps_session"
+  ],
+  "note": "Ran with RETRIEVAL_MAX_SCORE_GAP=0.0; the deployed agent used 0.10, so these numbers don't describe it."
+}

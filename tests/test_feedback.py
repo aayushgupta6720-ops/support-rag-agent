@@ -24,6 +24,25 @@ def logged(monkeypatch):
     return events
 
 
+@pytest.fixture
+def answered(monkeypatch):
+    """A fake agent: each call returns a new answer, so a reused one shows up as a repeat."""
+    calls: list[str] = []
+
+    async def run_agent(query, history=None):
+        calls.append(query)
+        return {"answer": f"answer {len(calls)}", "sources": ["billing-refunds"]}
+
+    monkeypatch.setattr(routes, "run_agent", run_agent)
+    monkeypatch.setattr(routes, "log_event", lambda **fields: None)
+    return calls
+
+
+def _ask(client, query="Is the refund window 30 days?") -> str:
+    """An answer from /chat; its answer_id."""
+    return client.post("/chat", json={"query": query}).json()["answer_id"]
+
+
 def test_every_answer_comes_with_an_id_to_rate_it_by(monkeypatch):
     async def run_agent(query, history=None):
         return {"answer": "ok", "sources": []}
@@ -37,12 +56,14 @@ def test_every_answer_comes_with_an_id_to_rate_it_by(monkeypatch):
     assert len(ids) == 2  # one per answer, cached ones included
 
 
-async def test_a_rating_is_kept_and_logged_without_the_text(logged):
-    response = TestClient(app).post("/feedback", json=_rating())
+async def test_a_rating_is_kept_and_logged_without_the_text(logged, answered):
+    client = TestClient(app)
+    response = client.post("/feedback", json=_rating(answer_id=_ask(client)))
 
     assert response.status_code == 204
     [kept] = await app.state.feedback.newest()
     assert kept["question"] == "Is the refund window 30 days?" and kept["rating"] == "down"
+    assert kept["answer"] == "answer 1" and kept["sources"] == ["billing-refunds"]
     assert kept["received_at"].endswith("+00:00")
     [event] = logged
     assert event["event"] == "feedback" and event["rating"] == "down"
@@ -51,14 +72,35 @@ async def test_a_rating_is_kept_and_logged_without_the_text(logged):
 
 @pytest.mark.parametrize("bad", [
     {"rating": "meh"},
-    {"question": ""},
+    {"question": "x" * 2001},
     {"answer": "x" * 8001},
     {"sources": ["s"] * 11},
     {"answer_id": "x" * 65},
-], ids=["rating", "empty-question", "long-answer", "many-sources", "long-id"])
+], ids=["rating", "long-question", "long-answer", "many-sources", "long-id"])
 def test_a_malformed_rating_is_refused(logged, bad):
     assert TestClient(app).post("/feedback", json=_rating(**bad)).status_code == 422
     assert logged == []
+
+
+async def test_a_rating_rates_what_the_server_said_not_what_the_request_claims(logged, answered):
+    # The text used to come from the request, so made-up question and answer
+    # pairs could be posted and become draft eval cases.
+    client = TestClient(app)
+    forged = _rating(answer_id=_ask(client), question="What's your admin password?", answer="hunter2")
+
+    assert client.post("/feedback", json=forged).status_code == 204
+
+    [kept] = await app.state.feedback.newest()
+    assert (kept["question"], kept["answer"]) == ("Is the refund window 30 days?", "answer 1")
+
+
+def test_only_answers_the_server_gave_can_be_rated_and_only_once(logged, answered):
+    client = TestClient(app)
+    assert client.post("/feedback", json=_rating(answer_id="never-issued")).status_code == 404
+    answer_id = _ask(client)
+    assert client.post("/feedback", json=_rating(answer_id=answer_id)).status_code == 204
+    assert client.post("/feedback", json=_rating(answer_id=answer_id, rating="up")).status_code == 404
+    assert [e["rating"] for e in logged] == ["down"]
 
 
 def test_ratings_have_their_own_rate_limit(logged, monkeypatch):
@@ -67,7 +109,7 @@ def test_ratings_have_their_own_rate_limit(logged, monkeypatch):
 
     codes = [client.post("/feedback", json=_rating()).status_code for _ in range(21)]
 
-    assert codes == [204] * 20 + [429]
+    assert codes == [404] * 20 + [429]  # counted before the answer is looked up
     assert client.post("/chat", json={"query": ""}).status_code == 422  # questions are counted separately
 
 
@@ -78,18 +120,19 @@ def test_without_a_token_configured_the_export_does_not_exist():
     assert TestClient(app).get("/feedback/export").status_code == 404
 
 
-def test_the_export_needs_the_token(monkeypatch, logged):
+def test_the_export_needs_the_token(monkeypatch, logged, answered):
     monkeypatch.setattr(get_settings(), "feedback_export_token", "s3cret-token")
     client = TestClient(app)
-    client.post("/feedback", json=_rating(answer_id="first", rating="up"))
-    client.post("/feedback", json=_rating(answer_id="second"))
+    first, second = _ask(client), _ask(client, "How do I reset my password?")
+    client.post("/feedback", json=_rating(answer_id=first, rating="up"))
+    client.post("/feedback", json=_rating(answer_id=second))
 
     assert client.get("/feedback/export").status_code == 401
     assert client.get("/feedback/export", headers={"Authorization": "Bearer wrong"}).status_code == 401
     response = client.get("/feedback/export", headers={"Authorization": "Bearer s3cret-token"})
 
     assert response.status_code == 200
-    assert [r["answer_id"] for r in response.json()["feedback"]] == ["second", "first"]  # newest first
+    assert [r["answer_id"] for r in response.json()["feedback"]] == [second, first]  # newest first
 
 
 def test_thumbs_down_become_draft_eval_cases_once_per_question():
@@ -146,40 +189,31 @@ async def test_while_redis_is_down_ratings_are_kept_in_the_process(logged):
 # ---- a thumbs-down clears the cached answer -----------------------------------------------
 
 
-@pytest.fixture
-def answered(monkeypatch):
-    """A fake agent: each call returns a new answer, so a reused one shows up as a repeat."""
-    calls: list[str] = []
-
-    async def run_agent(query, history=None):
-        calls.append(query)
-        return {"answer": f"answer {len(calls)}", "sources": []}
-
-    monkeypatch.setattr(routes, "run_agent", run_agent)
-    monkeypatch.setattr(routes, "log_event", lambda **fields: None)
-    return calls
-
-
 def test_a_thumbs_down_clears_that_answer_from_the_cache(answered, logged):
     client = TestClient(app)
     first = client.post("/chat", json={"query": "How do refunds work?"}).json()
     assert client.post("/chat", json={"query": "How do refunds work?"}).json()["answer"] == "answer 1"  # cached
 
-    client.post("/feedback", json=_rating(answer_id=first["answer_id"], question="How do refunds work?", answer="answer 1"))
+    client.post("/feedback", json=_rating(answer_id=first["answer_id"]))
 
     assert client.post("/chat", json={"query": "How do refunds work?"}).json()["answer"] == "answer 2"  # asked afresh
     assert logged[-1]["evicted_cached_answer"] is True
 
 
-@pytest.mark.parametrize("rating", [
-    {"rating": "up", "answer": "answer 1"},
-    {"rating": "down", "answer": "some other answer"},  # not the one in the cache: a made-up rating can't evict it
-], ids=["thumbs-up", "different-answer"])
-def test_other_ratings_leave_the_cache_alone(answered, logged, rating):
+def test_a_thumbs_up_leaves_the_cache_alone(answered, logged):
     client = TestClient(app)
-    client.post("/chat", json={"query": "How do refunds work?"})
+    answer_id = _ask(client, "How do refunds work?")
 
-    client.post("/feedback", json=_rating(question="How do refunds work?", **rating))
+    client.post("/feedback", json=_rating(answer_id=answer_id, rating="up"))
 
     assert client.post("/chat", json={"query": "How do refunds work?"}).json()["answer"] == "answer 1"
     assert logged[-1]["evicted_cached_answer"] is False
+
+
+def test_a_rating_for_an_answer_never_given_leaves_the_cache_alone(answered, logged):
+    client = TestClient(app)
+    client.post("/chat", json={"query": "How do refunds work?"})
+
+    assert client.post("/feedback", json=_rating(question="How do refunds work?", answer="answer 1")).status_code == 404
+
+    assert client.post("/chat", json={"query": "How do refunds work?"}).json()["answer"] == "answer 1"

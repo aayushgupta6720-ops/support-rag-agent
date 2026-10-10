@@ -76,10 +76,13 @@ class RedisAnswerCache:
     """Answers in Redis, expiring after the TTL. If Redis fails, the
     in-process `fallback` is used instead."""
 
-    def __init__(self, fallback: MemoryAnswerCache, redis: Redis, outage: RedisOutage | None = None) -> None:
+    def __init__(
+        self, fallback: MemoryAnswerCache, redis: Redis, outage: RedisOutage | None = None, prefix: str = "answer:"
+    ) -> None:
         self._fallback = fallback
         self._redis = redis
         self._outage = outage or RedisOutage()
+        self._prefix = prefix
 
     def _failed(self, exc: RedisError) -> None:
         if self._outage.failed():  # once per outage, not once per request
@@ -89,7 +92,7 @@ class RedisAnswerCache:
         if self._outage.skip():
             return await self._fallback.get(key)
         try:
-            raw = await self._redis.get(f"answer:{key}")
+            raw = await self._redis.get(f"{self._prefix}{key}")
         except RedisError as exc:
             self._failed(exc)
             return await self._fallback.get(key)
@@ -101,7 +104,7 @@ class RedisAnswerCache:
             await self._fallback.put(key, value)
             return
         try:
-            await self._redis.set(f"answer:{key}", json.dumps(value), ex=int(self._fallback.ttl_s))
+            await self._redis.set(f"{self._prefix}{key}", json.dumps(value), ex=int(self._fallback.ttl_s))
         except RedisError as exc:
             self._failed(exc)
             await self._fallback.put(key, value)
@@ -113,7 +116,7 @@ class RedisAnswerCache:
         if self._outage.skip():
             return
         try:
-            await self._redis.delete(f"answer:{key}")
+            await self._redis.delete(f"{self._prefix}{key}")
         except RedisError as exc:
             self._failed(exc)
             return

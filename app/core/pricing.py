@@ -21,15 +21,29 @@ EMBEDDING_USD_PER_1M_TOKENS = {
 _CHARS_PER_TOKEN = 4
 
 
+_warned: set[str] = set()
+
+
+def _unpriced(model: str) -> float:
+    """An unknown model costs nothing here, which would read as free: say so,
+    once per model, rather than log $0 silently."""
+    if model not in _warned:
+        _warned.add(model)
+        from app.core.observability import log_event
+
+        log_event(event="unpriced_model", model=model)
+    return 0.0
+
+
 def generation_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
     pricing = GENERATION_USD_PER_1M_TOKENS.get(model)
     if not pricing:
-        return 0.0
+        return _unpriced(model)
     return (input_tokens * pricing["input"] + output_tokens * pricing["output"]) / 1_000_000
 
 
 def embedding_cost_usd(model: str, billable_chars: int) -> float:
     price = EMBEDDING_USD_PER_1M_TOKENS.get(model)
     if not price:
-        return 0.0
+        return _unpriced(model)
     return billable_chars / _CHARS_PER_TOKEN * price / 1_000_000

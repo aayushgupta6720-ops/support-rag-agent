@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.body_limit import BodySizeLimit
 from app.api.answer_cache import build_answer_cache
-from app.api.feedback import build_feedback_store
+from app.api.feedback import build_feedback_store, build_issued_answers
 from app.api.feedback import router as feedback_router
 from app.api.ratelimit import build_rate_limiters
 from app.api.routes import router
@@ -36,6 +36,7 @@ app.state.rate_limiters = build_rate_limiters(settings, redis, redis_outage)
 app.state.sessions = build_session_store(settings, redis, redis_outage)
 app.state.answer_cache = build_answer_cache(settings, redis, redis_outage)
 app.state.feedback = build_feedback_store(settings, redis, redis_outage)
+app.state.issued_answers = build_issued_answers(settings, redis, redis_outage)
 # Which store the rate limits and chat history use, to check after a deploy.
 log_event(event="state_store", backend="redis" if redis else "memory")
 # A /chat body is at most a few KB: 2,000 chars of query even fully escaped.

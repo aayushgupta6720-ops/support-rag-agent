@@ -18,6 +18,13 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 SUPPORT_AGENT_URL = os.environ.get("SUPPORT_AGENT_URL", "http://localhost:8000")
+# Sized from the agent's worst case, not its typical ~5s: a /chat call makes up
+# to three Gemini calls (route, embed, generate), each allowed gemini_timeout_s
+# (60s), and retries 429s, 500s, 503s and dropped connections only in its first
+# 45s (_RETRY_WINDOW_S in app/api/routes.py): 225s at most. A shorter limit here
+# gives up on answers the agent is still about to deliver. tests/test_generation.py
+# checks a whole /chat finishes inside it.
+TIMEOUT_S = 240
 
 mcp = MCPServer(
     name="support-rag-agent",
@@ -47,14 +54,8 @@ def ask_support_agent(query: str, session_id: str | None = None) -> str:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    # Sized from the agent's worst case, not its typical ~5s: a /chat call
-    # makes up to three Gemini calls (route, embed, generate), each allowed
-    # gemini_timeout_s (60s), and retries 429s, 500s, 503s and dropped
-    # connections only in its first 45s (_RETRY_WINDOW_S in app/api/routes.py):
-    # 225s at most. A shorter limit here gives up on answers the agent is
-    # still about to deliver.
     try:
-        with urllib.request.urlopen(request, timeout=240) as response:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
             body = json.loads(response.read())
     except urllib.error.HTTPError as exc:
         # Only a ToolError's message reaches the model: any other exception

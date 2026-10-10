@@ -1,0 +1,48 @@
+{
+  "judge_pass_rate": 0.9692307692307692,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "by_category": {
+    "adversarial": {
+      "passed": 6,
+      "total": 7
+    },
+    "direct": {
+      "passed": 6,
+      "total": 6
+    },
+    "false_premise": {
+      "passed": 6,
+      "total": 6
+    },
+    "grounded": {
+      "passed": 23,
+      "total": 23
+    },
+    "multi_doc": {
+      "passed": 5,
+      "total": 5
+    },
+    "out_of_scope": {
+      "passed": 4,
+      "total": 4
+    },
+    "reasoning": {
+      "passed": 4,
+      "total": 5
+    },
+    "robustness": {
+      "passed": 3,
+      "total": 3
+    },
+    "unanswerable": {
+      "passed": 6,
+      "total": 6
+    }
+  },
+  "failed": [
+    "reasoning_lost_app_have_codes",
+    "adversarial_injection_rate_limit"
+  ],
+  "errored": []
+}

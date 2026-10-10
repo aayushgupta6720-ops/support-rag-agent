@@ -47,11 +47,12 @@ class ArticleResponse(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    """A visitor's rating of one answer. The question and answer come from
-    the visitor's own chat, sent only when they choose to rate it."""
+    """A visitor's rating of one answer, by the answer_id /chat gave it. The
+    server rates its own record of that answer; question, answer and sources
+    are accepted from older widgets but not used."""
 
     answer_id: str = Field(..., min_length=1, max_length=64)
     rating: Literal["up", "down"]
-    question: str = Field(..., min_length=1, max_length=2000)
-    answer: str = Field(..., min_length=1, max_length=8000)
+    question: str | None = Field(default=None, max_length=2000)
+    answer: str | None = Field(default=None, max_length=8000)
     sources: list[Annotated[str, StringConstraints(max_length=64)]] = Field(default_factory=list, max_length=10)

@@ -1,0 +1,59 @@
+{
+  "run": {
+    "git_commit": "5813f7c-dirty",
+    "generation_model": "gemini-flash-lite-latest",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.0,
+    "corpus_docs": 11,
+    "router_prompt": "router_v4",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v6",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 6
+  },
+  "judge_pass_rate": 0.8333333333333334,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 1.0,
+  "hit_at_1": 1.0,
+  "context_precision": 0.5277777777777778,
+  "citation_precision": 0.7,
+  "citation_recall": 0.8333333333333334,
+  "spurious_citations": [],
+  "by_split": {
+    "dev": {
+      "passed": 4,
+      "total": 5
+    },
+    "held_out": {
+      "passed": 1,
+      "total": 1
+    }
+  },
+  "by_category": {
+    "grounded": {
+      "passed": 3,
+      "total": 3
+    },
+    "multi_doc": {
+      "passed": 0,
+      "total": 1
+    },
+    "multi_turn": {
+      "passed": 1,
+      "total": 1
+    },
+    "reasoning": {
+      "passed": 1,
+      "total": 1
+    }
+  },
+  "failed": [
+    "multi_doc_downgrade_rate_limit"
+  ],
+  "errored": [],
+  "note": "Ran with RETRIEVAL_MAX_SCORE_GAP=0.0; the deployed agent used 0.10, so these numbers don't describe it."
+}
