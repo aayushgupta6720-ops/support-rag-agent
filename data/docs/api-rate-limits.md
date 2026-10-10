@@ -1,6 +1,6 @@
 # API Rate Limits
 
-The API enforces a limit of 100 requests per minute per API key on the free
+The API enforces a limit of 100 requests per minute per account on the free
 tier, and 1,000 requests per minute on paid plans. Limits are applied using a
 sliding window, not a fixed per-minute bucket.
 
