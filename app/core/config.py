@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     gemini_timeout_s: float = 60.0
     embedding_model: str = "gemini-embedding-001"
     embedding_dim: int = 768
-    generation_model: str = "gemini-flash-lite-latest"
+    # A pinned model, not an alias like gemini-flash-lite-latest: Google can move
+    # an alias to a new model, which would change answers and eval scores silently.
+    generation_model: str = "gemini-3.5-flash-lite"
     retrieval_top_k: int = 4
     # Drop chunks inside the top k that are unlikely to be relevant, so fewer
     # off-topic docs reach the answer (0 turns either off). min_score is a

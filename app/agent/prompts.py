@@ -237,7 +237,7 @@ GROUNDED_ANSWER_SYSTEM_PROMPT_V5 = GROUNDED_ANSWER_SYSTEM_PROMPT_V4 + (
 # v6 asks it to apply the rules to the user's situation and to speak as the
 # support agent. Checked on held-out cases written before v6 (split
 # "held_out", ids h2_*), most of which need a rule applied to a situation.
-GROUNDED_ANSWER_PROMPT_VERSION = "grounded_answer_v6"
+GROUNDED_ANSWER_PROMPT_VERSION_V6 = "grounded_answer_v6"
 GROUNDED_ANSWER_SYSTEM_PROMPT_V6 = GROUNDED_ANSWER_SYSTEM_PROMPT_V5 + (
     "\n\nApply the context to the user's situation: when a rule in it clearly "
     "covers their case, say what it means for them instead of hedging about "
@@ -247,6 +247,26 @@ GROUNDED_ANSWER_SYSTEM_PROMPT_V6 = GROUNDED_ANSWER_SYSTEM_PROMPT_V5 + (
     "if you need to refer to them."
 )
 
+# v6 refused a question two docs answer together: asked what a failed payment
+# does to the API rate limit, it said it lacked information, though one doc
+# says the account is downgraded to the free tier and another gives the free
+# tier's limit (eval: multi_doc_downgrade_rate_limit, failing 4/4 by
+# 2026-10-10). v7 says to combine facts across docs. It also drops v6's worked
+# example, a 14-day refund window and a purchase 10 days ago, which matched a
+# held-out case (h2_annual_refund_day_13). Checked on held-out cases written
+# before v7 (ids h3_*).
+GROUNDED_ANSWER_PROMPT_VERSION = "grounded_answer_v7"
+GROUNDED_ANSWER_SYSTEM_PROMPT_V7 = GROUNDED_ANSWER_SYSTEM_PROMPT_V5 + (
+    "\n\nApply the context to the user's situation: when a rule in it clearly "
+    "covers their case, say what it means for them instead of hedging about "
+    "whether it applies. When the answer follows from putting facts from "
+    "different passages together (one says what happens to the account, "
+    "another what that means), put them together and answer; that is "
+    "grounded, not guessing. Speak as the support agent: don't refer to \"the "
+    "context\" or \"the passages\"; say \"our help articles\" if you need to "
+    "refer to them."
+)
+
 ROUTER_SYSTEM_PROMPT = ROUTER_SYSTEM_PROMPT_V4
 DIRECT_ANSWER_SYSTEM_PROMPT = DIRECT_ANSWER_SYSTEM_PROMPT_V3
-GROUNDED_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT_V6
+GROUNDED_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT_V7

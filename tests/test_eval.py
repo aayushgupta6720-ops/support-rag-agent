@@ -52,11 +52,13 @@ def test_golden_set_uses_known_categories_and_covers_all_of_them():
     assert {c.category for c in load_golden_set()} == CATEGORIES
 
 
-def test_every_case_is_in_a_known_split_and_held_out_ones_stand_alone():
+def test_every_case_is_in_a_known_split_and_the_held_out_set_is_broad():
     cases = load_golden_set()
     assert {c.split for c in cases} == SPLITS
     held_out = [c for c in cases if c.split == "held_out"]
-    assert len(held_out) >= 10 and all(not c.history for c in held_out)
+    # Held out across the board, multi-turn included, not just the kind of case the
+    # latest prompt change was aimed at.
+    assert len(held_out) >= 25 and len({c.category for c in held_out}) >= 8
 
 
 def test_expected_doc_ids_exist_in_the_corpus():
@@ -91,6 +93,8 @@ _UNANSWERABLE_PATTERNS = {
     "unanswerable_upload_size": r"\b\d+\s?(kb|mb|gb)\b|file size|upload limit",
     "ho_unanswerable_android": r"android|iphone|\bios\b|mobile app",
     "h2_unanswerable_currency": r"\beuros?\b|currenc|\busd\b|\bgbp\b|dollar",
+    "h3_unanswerable_webhooks": r"webhook|callback url",
+    "h3_unanswerable_data_region": r"data (is )?stored|data residency|\bregion\b|\beu\b|united states",
 }
 
 
