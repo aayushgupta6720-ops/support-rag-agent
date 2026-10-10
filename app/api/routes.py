@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.agent.graph import run_agent
 from app.api.answer_cache import answer_cache_key
-from app.api.ratelimit import client_key, rate_limit
+from app.api.ratelimit import charge_everyone, client_key, rate_limit
 from app.core.config import get_settings
 from app.core.gemini_client import (
     DailyQuotaExhaustedError,
@@ -183,6 +183,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
     cache_hit = result is not None
 
     if not cache_hit:
+        await charge_everyone(http_request, "chat_all")  # a cached answer costs no model calls
         try:
             result = await run_agent(request.query, history=history)
         except Exception as exc:

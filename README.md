@@ -222,7 +222,7 @@ passes. Lowering the judge's temperature was the other option, but
 Gemini 3 models at the default 1.0, warning that lower values can cause
 looping, so it wasn't used.
 
-The golden set (`data/eval/golden_set.jsonl`) has 97 cases. Most of them test
+The golden set (`data/eval/golden_set.jsonl`) has 115 cases. Most of them test
 failure modes, not whether the model can find the answer to an easy question:
 
 | Category | Cases | What it checks |
@@ -241,22 +241,37 @@ failure modes, not whether the model can find the answer to an easy question:
 Every case belongs to a split:
 
 - **`dev`** (86 cases): the cases prompts and settings were tuned against.
-- **`held_out`** (11 cases): written before the latest change and never used
+- **`held_out`** (29 cases): written before the latest change and never used
   to tune it, so they show whether the change generalizes rather than
   fitting the dev cases.
 
 Once held-out cases have informed a decision, they move to dev and fresh
 ones are written. The 13 written for the score gap and
 `grounded_answer_v5` moved to dev after they showed that 0.08 was too tight
-and that v5 hedged. The 11 current ones (`h2_*`) were written before
+and that v5 hedged. The 11 `h2_*` ones were written before
 `grounded_answer_v6`, and most need an article's rule applied to the
-user's situation. Run one split with `python -m scripts.eval held_out`.
+user's situation. A review pointed out they were nearly all one kind of
+case, so 18 more (`h3_*`) were written before `grounded_answer_v7`,
+across every category, multi-turn included; `grounded_answer_v6` passed
+all 18. Run one split with `python -m scripts.eval held_out`.
 
 Pass rates are per category because an aggregate hides the weak spots. With
 this few cases per category, treat a single run as a smoke signal, not a
 benchmark: one flipped case moves a category by 20+ points.
 
-**Latest run** (`gemini-flash-lite-latest`, 97 cases, `router_v4`,
+**`grounded_answer_v7` (current).** `multi_doc_downgrade_rate_limit`, asked
+what a failed payment does to the API rate limit, had started failing 4/4
+with "I don't have enough information", though one article says the account
+is downgraded to the free tier and another gives that tier's limit. v7 says
+to put facts from different articles together, and drops v6's worked
+example (a 14-day refund, a purchase 10 days ago), which matched the
+held-out case `h2_annual_refund_day_13`. Its first run passed all 44 cases
+it reached, including all 7 `multi_doc` ones; the eval key's daily quota ran
+out before the rest, so the full run, held-out split included, is still to
+come. The model is now pinned to `gemini-3.5-flash-lite` rather than the
+alias `gemini-flash-lite-latest`, which Google can move.
+
+**Latest full run** (`gemini-flash-lite-latest`, 97 cases, `router_v4`,
 `direct_answer_v3`, `grounded_answer_v6`, `judge_v2`,
 `RETRIEVAL_MAX_SCORE_GAP=0.10`): 97/97 judge pass, 11/11 held-out and 86/86
 dev, with no re-votes needed. Retrieval hit rate and recall were 100%, MRR
@@ -546,8 +561,9 @@ Either way, use your platform's secret manager for `GEMINI_API_KEY` (Secret
 Manager / SSM Parameter Store), not a plain env var in the deploy command —
 those tend to leak into logs, `describe` output, and shell history.
 
-**Quota:** on the Gemini free tier, `gemini-3.5-flash-lite` (what
-`gemini-flash-lite-latest` resolves to) allows 500 requests/day per Google
+**Quota:** on the Gemini free tier, `gemini-3.5-flash-lite` (the pinned
+model; the alias `gemini-flash-lite-latest` resolved to it on 2026-10-10)
+allows 500 requests/day per Google
 project, shared by everything using that project's keys. A full eval run is
 ~220 requests, so give the deployed service a key from its own project;
 otherwise a couple of eval runs can exhaust the demo's quota. When the daily
@@ -596,7 +612,11 @@ to log the question and the router's search query when debugging.
 day. Past that, `/chat` returns a 429 with `Retry-After` and a `detail`
 saying when to try again, without calling the model; the MCP tool passes
 that message on. Change the numbers with `CHAT_LIMIT_PER_MINUTE` and
-`CHAT_LIMIT_PER_DAY` (0 turns one off). With `REDIS_URL` set, counts (and
+`CHAT_LIMIT_PER_DAY` (0 turns one off). Every visitor also shares one budget
+of 200 new questions a day (`CHAT_LIMIT_ALL_PER_DAY`), about 400 of the 500
+model requests: per-IP limits alone let nine addresses, or one visitor with a
+block of IPv6 addresses, use up the day. A cached answer calls no model, so
+it doesn't count. With `REDIS_URL` set, counts (and
 chat sessions) live in Redis. They survive restarts, which matters on
 Render's free plan because the service restarts every time it wakes from
 sleep: with counts in memory, each wake-up handed every visitor a fresh

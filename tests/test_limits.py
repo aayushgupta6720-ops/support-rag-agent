@@ -64,6 +64,45 @@ def test_forged_forwarded_headers_do_not_reset_the_count_and_others_are_unaffect
     assert _ask(client, "203.0.113.9").status_code == 200
 
 
+def test_every_visitor_shares_one_daily_budget_of_new_questions(agent_calls, monkeypatch):
+    # Per-IP limits alone let a handful of addresses use up the day's model quota.
+    settings = get_settings()
+    monkeypatch.setattr(settings, "client_ip_header", "CF-Connecting-IP")
+    monkeypatch.setattr(settings, "chat_limit_all_per_day", 4)
+    monkeypatch.setattr(app.state, "rate_limiters", build_rate_limiters(settings))
+    client = TestClient(app)
+    assert [_ask(client, f"198.51.100.{i}").status_code for i in range(4)] == [200] * 4
+
+    refused = _ask(client, "203.0.113.9")  # a new visitor, under its own limits
+
+    assert refused.status_code == 429 and len(agent_calls) == 4
+    assert "limit of 4 new questions a day for everyone" in refused.json()["detail"]
+
+
+def test_a_cached_answer_costs_nothing_from_the_shared_budget(monkeypatch):
+    from app.api.answer_cache import build_answer_cache
+
+    calls: list[str] = []
+
+    async def fake_run_agent(query, history=None):
+        calls.append(query)
+        return {"answer": "ok", "sources": [], "used_tool": False}
+
+    settings = get_settings()
+    monkeypatch.setattr(routes, "run_agent", fake_run_agent)
+    monkeypatch.setattr(routes, "log_event", lambda **fields: None)
+    monkeypatch.setattr(settings, "client_ip_header", "CF-Connecting-IP")
+    monkeypatch.setattr(settings, "chat_limit_all_per_day", 1)
+    monkeypatch.setattr(app.state, "rate_limiters", build_rate_limiters(settings))
+    monkeypatch.setattr(app.state, "answer_cache", build_answer_cache(settings))
+    client = TestClient(app)
+
+    assert [_ask(client, f"198.51.100.{i}").status_code for i in range(3)] == [200] * 3  # same question
+    assert calls == ["reset password"]  # answered once, then served from the cache
+    other = client.post("/chat", json={"query": "export my data"}, headers={"CF-Connecting-IP": "198.51.100.9"})
+    assert other.status_code == 429
+
+
 def test_a_visitor_over_the_limit_is_refused_when_counts_are_in_redis(agent_calls, behind_render, monkeypatch):
     redis = fakeredis.FakeAsyncRedis(server=fakeredis.FakeServer())
     monkeypatch.setattr(app.state, "rate_limiters", build_rate_limiters(get_settings(), redis))

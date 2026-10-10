@@ -169,7 +169,10 @@ def build_rate_limiters(
     # /health/search makes a Qdrant request but no model call; a scheduler
     # needs one now and then, not a stream.
     search_check = RateLimiter("search checks", [Limit(6, 60, "a minute")])
-    limiters = {"chat": chat, "feedback": feedback, "search_check": search_check}
+    # Every visitor's uncached questions together (two generation calls each),
+    # counted under one key, EVERYONE.
+    chat_all = RateLimiter("questions from everyone", [Limit(settings.chat_limit_all_per_day, 24 * 3600, "a day")])
+    limiters = {"chat": chat, "chat_all": chat_all, "feedback": feedback, "search_check": search_check}
     return {
         name: RedisRateLimiter(limiter, redis, outage=outage) if redis else limiter
         for name, limiter in limiters.items()
@@ -216,6 +219,27 @@ def _duration(seconds: int) -> str:
     else:
         n, unit = math.ceil(seconds / 3600), "hour"
     return f"{n} {unit}{'' if n == 1 else 's'}"
+
+
+EVERYONE = "everyone"  # the key for limits shared by every visitor
+
+
+async def charge_everyone(request: Request, name: str) -> None:
+    """Count a request against the `name` limits every visitor shares, or refuse
+    it with a 429 once the demo has used its budget for the day."""
+    limiter: RateLimiter | RedisRateLimiter = request.app.state.rate_limiters[name]
+    refused = await limiter.hit(EVERYONE)
+    if refused is None:
+        return
+    limit, retry_after_s = refused
+    wait = max(1, math.ceil(retry_after_s))
+    log_event(event="rate_limited", limiter=name, client=EVERYONE, retry_after_s=wait)
+    raise HTTPException(
+        status_code=429,
+        detail=f"The demo has answered its limit of {limit.count} new questions a day for everyone, which keeps "
+        f"it within its free model quota. Try again in {_duration(wait)}.",
+        headers={"Retry-After": str(wait)},
+    )
 
 
 def rate_limit(name: str):

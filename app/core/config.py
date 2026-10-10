@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # can't use up the shared daily Gemini quota. 0 turns a limit off.
     chat_limit_per_minute: int = 6
     chat_limit_per_day: int = 30
+    # Across every visitor: per-IP limits alone let nine visitors (or one with
+    # a block of IPv6 addresses) use up the free tier's 500 requests a day. Only
+    # questions that reach the model count; a cached answer costs nothing.
+    chat_limit_all_per_day: int = 200
     # A header holding the visitor's IP, set by a proxy in front of the app
     # that overwrites any client-sent copy (behind Cloudflare, as on Render:
     # CF-Connecting-IP). Unset means the connecting address, right when
