@@ -119,9 +119,13 @@ def run_metadata(case_ids: list[str]) -> dict:
         "retrieval_max_score_gap": settings.retrieval_max_score_gap,
         "retrieval_expand_docs": settings.retrieval_expand_docs,
         "corpus_docs": len(load_documents()),
-        "router_prompt": prompts.ROUTER_PROMPT_VERSION,
-        "direct_answer_prompt": prompts.DIRECT_ANSWER_PROMPT_VERSION,
-        "grounded_answer_prompt": prompts.GROUNDED_ANSWER_PROMPT_VERSION,
+        "agent_mode": settings.agent_mode,
+        **({"agent_prompt": prompts.AGENT_PROMPT_VERSION, "agent_max_steps": settings.agent_max_steps}
+           if settings.agent_mode == "loop" else {
+            "router_prompt": prompts.ROUTER_PROMPT_VERSION,
+            "direct_answer_prompt": prompts.DIRECT_ANSWER_PROMPT_VERSION,
+            "grounded_answer_prompt": prompts.GROUNDED_ANSWER_PROMPT_VERSION,
+        }),
         "judge_prompt": JUDGE_PROMPT_VERSION,
         "judge_max_votes": MAX_VOTES,
         "cases": len(case_ids),
