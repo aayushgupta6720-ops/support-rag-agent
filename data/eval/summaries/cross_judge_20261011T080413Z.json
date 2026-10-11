@@ -1,0 +1,50 @@
+{
+  "results": "eval_20261011T080413Z.json",
+  "run": {
+    "git_commit": "d3a8f61-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "corpus_docs": 11,
+    "router_prompt": "router_v4",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 115,
+    "settings_match_render": true
+  },
+  "judge_prompt": "judge_v2",
+  "other_judge": "gemma-4-26b-a4b-it",
+  "cases": 115,
+  "unparsed": [],
+  "retrieval_differs_from_run": [],
+  "gemini_pass_rate": 0.9826086956521739,
+  "other_pass_rate": 0.9652173913043478,
+  "agreement": 0.9826086956521739,
+  "cohen_kappa": 0.6587537091988134,
+  "disagreements": [
+    {
+      "id": "password_reset_no_email",
+      "category": "grounded",
+      "split": "dev",
+      "gemini": true,
+      "gemini_first_vote": true,
+      "other": false,
+      "other_reasoning": "While the agent provides helpful information from the documentation, it fails to include the instruction regarding contacting support with a government-issued ID if the user no longer has access to their email, which is a key component of the reference.",
+      "retrieval_differs": false
+    },
+    {
+      "id": "multi_doc_delete_within_refund_window",
+      "category": "multi_doc",
+      "split": "dev",
+      "gemini": true,
+      "gemini_first_vote": true,
+      "other": false,
+      "other_reasoning": "The agent incorrectly implies that deleting the account will automatically trigger a refund, whereas both the reference and support docs state that a refund must be requested by opening a support ticket.",
+      "retrieval_differs": false
+    }
+  ]
+}
