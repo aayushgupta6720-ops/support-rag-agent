@@ -211,7 +211,7 @@ GROUNDED_ANSWER_SYSTEM_PROMPT_V4 = (
 # live, "What is the refund policy?" was searched as "refund policy billing
 # invoices", which pulled the invoices doc in beside the refunds one. v4
 # keeps the query to what the user asked about.
-ROUTER_PROMPT_VERSION = "router_v4"
+ROUTER_PROMPT_VERSION_V4 = "router_v4"
 ROUTER_SYSTEM_PROMPT_V4 = ROUTER_SYSTEM_PROMPT_V3 + (
     " Build the query from the user's own words and what they refer to; a "
     "close synonym is fine, but don't add other topics or features they "
@@ -267,6 +267,22 @@ GROUNDED_ANSWER_SYSTEM_PROMPT_V7 = GROUNDED_ANSWER_SYSTEM_PROMPT_V5 + (
     "refer to them."
 )
 
-ROUTER_SYSTEM_PROMPT = ROUTER_SYSTEM_PROMPT_V4
+# v3 and v4 taught the standalone query with an example that is one of the
+# eval's own cases (multi_turn_refund_annual: "what about annual plans?" after
+# a refund question), so that case partly tested whether the model copies its
+# prompt. v5 describes the rewrite with a placeholder instead; nothing else changes.
+_V3_EXAMPLE = (
+    "\"what about annual plans?\" "
+    "after a question about refunds becomes \"refund policy for annual plans\"."
+)
+ROUTER_PROMPT_VERSION = "router_v5"
+ROUTER_SYSTEM_PROMPT_V5 = ROUTER_SYSTEM_PROMPT_V4.replace(
+    _V3_EXAMPLE,
+    "a follow-up like \"what about the other one?\" becomes a query that names "
+    "both the earlier topic and what \"the other one\" is.",
+)
+assert ROUTER_SYSTEM_PROMPT_V5 != ROUTER_SYSTEM_PROMPT_V4, "router_v5 must replace v4's example"
+
+ROUTER_SYSTEM_PROMPT = ROUTER_SYSTEM_PROMPT_V5
 DIRECT_ANSWER_SYSTEM_PROMPT = DIRECT_ANSWER_SYSTEM_PROMPT_V3
 GROUNDED_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT_V7
