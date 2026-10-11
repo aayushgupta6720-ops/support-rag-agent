@@ -232,15 +232,15 @@ failure modes, not whether the model can find the answer to an easy question:
 | Category | Cases | What it checks |
 |---|---|---|
 | `grounded` | 28 | Answer is in one doc, including details beyond the headline fact |
-| `reasoning` | 14 | Applying a policy to the user's situation ("I bought annual 3 weeks ago — refund?") |
-| `false_premise` | 9 | Question assumes something the docs contradict ("SMS 2FA setup?") |
-| `multi_doc` | 7 | A complete answer needs facts from two docs |
-| `unanswerable` | 8 | In-domain but not in the docs — must not invent a price, phone number, etc. |
-| `out_of_scope` | 5 | Not a support question — should stay in role |
-| `adversarial` | 8 | Prompt injection and social engineering |
-| `robustness` | 4 | Typos, Spanish, vague phrasing |
-| `direct` | 6 | Greetings and small talk — no retrieval |
-| `multi_turn` | 8 | A follow-up that only makes sense with the earlier turns ("What about annual plans?"), a topic switch, and a false premise after pushback |
+| `reasoning` | 17 | Applying a policy to the user's situation ("I bought annual 3 weeks ago — refund?") |
+| `false_premise` | 11 | Question assumes something the docs contradict ("SMS 2FA setup?") |
+| `multi_doc` | 11 | A complete answer needs facts from two docs |
+| `unanswerable` | 10 | In-domain but not in the docs — must not invent a price, phone number, etc. |
+| `out_of_scope` | 6 | Not a support question — should stay in role |
+| `adversarial` | 10 | Prompt injection and social engineering |
+| `robustness` | 5 | Typos, Spanish, vague phrasing |
+| `direct` | 7 | Greetings and small talk — no retrieval |
+| `multi_turn` | 10 | A follow-up that only makes sense with the earlier turns ("What about annual plans?"), a topic switch, and a false premise after pushback |
 
 Every case belongs to a split:
 
@@ -270,28 +270,48 @@ to the free tier and another gives that tier's limit; the same call with
 those articles as fixed context failed 3/3 too. v7 says to put facts from
 different articles together, and drops v6's worked example (a 14-day refund,
 a purchase 10 days ago), which matched the held-out case
-`h2_annual_refund_day_13`. A caveat on everything measured on 2026-10-10:
-those runs used a score gap of 0, while the deployed agent uses 0.10, so
-they don't describe it. The eval now refuses to run with settings that
-differ from `render.yaml`'s. Under those settings v6 passed the 18 `h3_*`
-cases and v7 the 44 cases it reached before the eval key's daily quota ran
-out (all 7 `multi_doc` ones); both need re-running at 0.10, and the full v7
-run is still to come. The model is now pinned to `gemini-3.5-flash-lite`
-rather than the alias `gemini-flash-lite-latest`, which Google can move.
+`h2_annual_refund_day_13`. The model is now pinned to
+`gemini-3.5-flash-lite` rather than the alias `gemini-flash-lite-latest`,
+which Google can move.
+
+The runs on 2026-10-10 used a score gap of 0, while the deployed agent uses
+0.10, so they didn't describe it; the eval now refuses to run with settings
+that differ from `render.yaml`'s. At the deployed settings v7 scored
+113/115 (below). Both failures are retrieval misses that no prompt can fix:
+
+- `multi_doc_downgrade_rate_limit`: the billing chunk that came back covers
+  renewals and refunds, not the failed-payment downgrade, so "I don't have
+  enough information" is the faithful answer to what the model was given.
+- `ho_unrecognized_signin`: the password-reset article scored 0.616, 0.005
+  under the gap's cut-off (0.721 − 0.10), so the rule that a reset signs out
+  other sessions never reached the model.
+
+v6, run on the 11 `multi_doc` cases at the same settings, scored the same
+9/11 with the same two failures. So v7 is level with v6 at the deployed
+settings, not better: the multi-doc answer it fixed at gap 0 needs a chunk
+the 0.10 gap doesn't keep. The next fix is retrieval (more chunks per doc,
+or a gap measured per doc), not the prompt.
 
 Each run's summary (settings, rates, cost, failed and errored cases) is
 committed under `data/eval/summaries/`; the full answers stay in the
 gitignored `data/eval/results/`. Since 2026-10-10 the summary includes what
 the run would have cost on a paid key, judge included.
 
-**Latest full run** (`gemini-flash-lite-latest`, 97 cases, `router_v4`,
-`direct_answer_v3`, `grounded_answer_v6`, `judge_v2`,
-`RETRIEVAL_MAX_SCORE_GAP=0.10`): 97/97 judge pass, 11/11 held-out and 86/86
-dev, with no re-votes needed. Retrieval hit rate and recall were 100%, MRR
-0.96, hit@1 93% and context precision 55%. Citation precision was 94% and
-citation recall 99%, and no answer with nothing to find cited a doc. The
-eval key's daily quota ran out after 80 cases, so the last 17 ran on the
-demo's key, with the same code and settings.
+**Latest full run** (2026-10-11; `gemini-3.5-flash-lite`, 115 cases,
+`router_v4`, `direct_answer_v3`, `grounded_answer_v7`, `judge_v2`,
+`RETRIEVAL_MAX_SCORE_GAP=0.10`): 113/115 judge pass, 29/29 held-out and
+84/86 dev. Retrieval hit rate was 100% and recall 99%, MRR 0.96, hit@1 93%
+and context precision 57%. Citation precision was 90% and citation recall
+97%, and no answer with nothing to find cited a doc. It took 348 chat-model
+requests, which would cost $0.12 on a paid key ($0.08 agent, $0.04 judge).
+Its summary is `data/eval/summaries/eval_20261011T080413Z.json`, recorded as
+`d3a8f61-dirty` only because the clean worktree it ran in held an untracked
+link to the virtualenv.
+
+**The run before that** (`gemini-flash-lite-latest`, 97 cases,
+`grounded_answer_v6`, gap 0.10): 97/97 judge pass, 11/11 held-out and 86/86
+dev, MRR 0.96, hit@1 93%, context precision 55%, citation precision 94% and
+recall 99%.
 
 What changed, and what the held-out cases said about it:
 
@@ -323,7 +343,7 @@ hit@1 95%, context precision 75%. `grounded_answer_v4` stopped the
 "I don't have enough information" opener on contradicted claims: every
 false premise and contradicted adversarial claim started with a plain "No".
 
-**The run before that** (`grounded_answer_v3`, no score gap): also 73/73, with
+**Earlier** (`grounded_answer_v3`, no score gap): also 73/73, with
 MRR 0.95, hit@1 91% and context precision 34%. It was the first run with v3
 prompts, the 11-doc corpus and `judge_v2`, so it can't say which of the
 three moved a number:
