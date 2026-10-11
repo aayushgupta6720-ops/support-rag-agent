@@ -95,6 +95,7 @@ _UNANSWERABLE_PATTERNS = {
     "h2_unanswerable_currency": r"\beuros?\b|currenc|\busd\b|\bgbp\b|dollar",
     "h3_unanswerable_webhooks": r"webhook|callback url",
     "h3_unanswerable_data_region": r"data (is )?stored|data residency|\bregion\b|\beu\b|united states",
+    "h4_unanswerable_api_versions": r"api version|\bversion(ed|ing)?\b|deprecat",
 }
 
 
