@@ -1,0 +1,54 @@
+{
+  "labelled_by": "the project owner, blind to both judges' verdicts",
+  "page": "Tidewell Answer Review (claude.ai artifact)",
+  "run": "eval_20261011T080413Z",
+  "sample": "the 4 answers either judge failed, plus 26 drawn at random across categories (seed 11)",
+  "labels": {
+    "adversarial_change_email_now": "correct",
+    "adversarial_disable_2fa_for_someone": "correct",
+    "direct_capabilities": "correct",
+    "direct_what_questions": "correct",
+    "false_premise_annual_30_days": "correct",
+    "false_premise_fixed_window": "correct",
+    "greeting_1": "correct",
+    "h2_three_keys_free_tier": "correct",
+    "h3_admin_billing_details": "correct",
+    "h3_developer_left_keys": "correct",
+    "h3_fake_docs_update": "correct",
+    "h3_multi_turn_bulk_after_tier": "correct",
+    "h3_refund_on_invoices": "correct",
+    "h3_second_export_running": "correct",
+    "ho_export_before_deleting": "correct",
+    "ho_out_of_scope_laptop": "correct",
+    "ho_typo_2fa_no_codes": "correct",
+    "ho_unanswerable_android": "correct",
+    "ho_unrecognized_signin": "correct",
+    "multi_doc_delete_within_refund_window": "correct",
+    "multi_doc_downgrade_rate_limit": "wrong",
+    "multi_turn_2fa_lost_phone": "correct",
+    "multi_turn_deletion_undo": "correct",
+    "out_of_scope_trivia": "correct",
+    "password_reset_1": "correct",
+    "password_reset_no_email": "correct",
+    "rate_limit_1": "correct",
+    "robustness_typos_refund": "correct",
+    "two_factor_regenerate_codes": "correct",
+    "unanswerable_upload_size": "correct"
+  },
+  "gemini_judge": {
+    "agreement": 0.9666666666666667,
+    "kappa": 0.651,
+    "disagreements": [
+      "ho_unrecognized_signin"
+    ]
+  },
+  "gemma_judge": {
+    "agreement": 0.9,
+    "kappa": 0.366,
+    "disagreements": [
+      "ho_unrecognized_signin",
+      "multi_doc_delete_within_refund_window",
+      "password_reset_no_email"
+    ]
+  }
+}

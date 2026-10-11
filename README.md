@@ -253,8 +253,20 @@ failed two answers Gemini passed: `password_reset_no_email` left out the
 route through support with ID for someone who no longer has the email, and
 `multi_doc_delete_within_refund_window` could be read as saying deletion
 refunds automatically, when a refund needs a ticket. So by the stricter judge
-the run is 111/115. A sample of 30 answers is being labelled by hand to see
-which judge a person agrees with.
+the run is 111/115.
+
+**Checked against a person.** 30 of the run's answers were labelled by hand,
+blind to both judges: the 4 that either judge failed, plus 26 drawn at random
+across categories. The person marked 29 correct and 1 wrong (the downgrade
+retrieval miss). The Gemini judge agreed on 29 of 30 (kappa 0.65), Gemma on
+27 (kappa 0.37). Neither judge passed an answer the person marked wrong.
+Every disagreement was a judge failing an answer the person passed, so on
+this sample the judges grade more strictly than a person and the pass rate
+isn't inflated by a lenient judge. The one answer both judges failed and the
+person passed, `ho_unrecognized_signin`, leaves out that a password reset
+signs out other sessions, which was half the question. One labeller, 30
+answers and a single "wrong" make both kappas unstable. Labels and agreement
+are in `data/eval/summaries/human_labels_20261011T080413Z.json`.
 
 The golden set (`data/eval/golden_set.jsonl`) has 127 cases. Most of them test
 failure modes, not whether the model can find the answer to an easy question:
