@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     # scripts/threshold_sweep.py and the README.
     retrieval_min_score: float = 0.0
     retrieval_max_score_gap: float = 0.0
+    # Give the model each retrieved article whole rather than the chunk that
+    # matched. The articles are short (about 800 characters), and a fact can sit
+    # in a chunk that didn't score high enough: on 2026-10-11 the failed-payment
+    # chunk of the billing article never came back for "payment fails
+    # downgrade API rate limit", though the article's refund chunk did.
+    retrieval_expand_docs: bool = False
     chunk_max_chars: int = 800
     chunk_overlap_chars: int = 100
 

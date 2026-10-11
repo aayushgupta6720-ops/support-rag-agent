@@ -35,18 +35,28 @@ ROOT = Path(__file__).resolve().parent.parent
 RESULTS_DIR = ROOT / "data" / "eval" / "results"
 SUMMARIES_DIR = ROOT / "data" / "eval" / "summaries"
 # Settings that change which chunks an answer sees, compared with the deployed ones.
-DEPLOYED_SETTINGS = ("RETRIEVAL_MAX_SCORE_GAP", "RETRIEVAL_MIN_SCORE", "RETRIEVAL_TOP_K")
+DEPLOYED_SETTINGS = ("RETRIEVAL_MAX_SCORE_GAP", "RETRIEVAL_MIN_SCORE", "RETRIEVAL_TOP_K", "RETRIEVAL_EXPAND_DOCS")
+
+
+def _setting_value(value) -> float:
+    """A setting as a number, so render.yaml's strings compare with it: "0.10", "true"."""
+    if isinstance(value, str) and value.lower() in ("true", "false"):
+        return float(value.lower() == "true")
+    return float(value)
 
 
 def settings_differing_from_render() -> dict[str, tuple[float, float]]:
-    """{setting: (here, render.yaml)} for each deployed retrieval setting that differs."""
+    """{setting: (here, render.yaml)} for each deployed retrieval setting that differs. One that
+    render.yaml doesn't set must be at its default here."""
     blueprint = (ROOT / "render.yaml").read_text()
-    deployed = dict(re.findall(r'- key: (RETRIEVAL_\w+)\s+value: "?([0-9.]+)"?', blueprint))
+    deployed = dict(re.findall(r'- key: (RETRIEVAL_\w+)\s+value: "?([0-9.]+|true|false)"?', blueprint))
     settings = get_settings()
     differing = {}
     for name in DEPLOYED_SETTINGS:
-        if name in deployed and float(getattr(settings, name.lower())) != float(deployed[name]):
-            differing[name] = (float(getattr(settings, name.lower())), float(deployed[name]))
+        here = _setting_value(getattr(settings, name.lower()))
+        there = _setting_value(deployed[name]) if name in deployed else _setting_value(type(settings).model_fields[name.lower()].default)
+        if here != there:
+            differing[name] = (here, there)
     return differing
 
 
@@ -107,6 +117,7 @@ def run_metadata(case_ids: list[str]) -> dict:
         "retrieval_top_k": settings.retrieval_top_k,
         "retrieval_min_score": settings.retrieval_min_score,
         "retrieval_max_score_gap": settings.retrieval_max_score_gap,
+        "retrieval_expand_docs": settings.retrieval_expand_docs,
         "corpus_docs": len(load_documents()),
         "router_prompt": prompts.ROUTER_PROMPT_VERSION,
         "direct_answer_prompt": prompts.DIRECT_ANSWER_PROMPT_VERSION,

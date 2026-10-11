@@ -297,3 +297,17 @@ async def test_an_answer_with_nothing_to_find_should_cite_nothing(fake_agent, mo
 
     assert report.results[0].citation_precision is None and report.results[0].citation_recall is None
     assert report.spurious_citations() == ["seats"]
+
+
+def test_eval_runs_only_with_the_deployed_retrieval_settings(monkeypatch):
+    from app.core.config import get_settings
+    from scripts.eval import settings_differing_from_render
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "retrieval_max_score_gap", 0.10)  # render.yaml's
+    assert settings_differing_from_render() == {}
+    monkeypatch.setattr(settings, "retrieval_expand_docs", True)  # render.yaml leaves it at the default, off
+    assert settings_differing_from_render() == {"RETRIEVAL_EXPAND_DOCS": (1.0, 0.0)}
+    monkeypatch.setattr(settings, "retrieval_expand_docs", False)
+    monkeypatch.setattr(settings, "retrieval_top_k", 6)
+    assert settings_differing_from_render() == {"RETRIEVAL_TOP_K": (6.0, 4.0)}

@@ -304,3 +304,24 @@ async def test_a_failed_search_is_reported_as_search_unavailable(monkeypatch, er
 
     with pytest.raises(qdrant_store.SearchUnavailableError):
         await qdrant_store.search([0.1], top_k=4)
+
+
+# --- whole articles instead of chunks (RETRIEVAL_EXPAND_DOCS)
+
+
+def test_chunks_become_their_whole_articles_once_each_best_first():
+    from app.rag.documents import load_documents
+    from app.rag.retrieval import RetrievedChunk, whole_articles
+
+    billing = next(d for d in load_documents() if d.doc_id == "billing-refunds")
+    chunks = [
+        RetrievedChunk("api-rate-limits", "API Rate Limits", "# API Rate Limits\n\nThe API enforces...", 0.69),
+        RetrievedChunk("api-rate-limits", "API Rate Limits", "# API Rate Limits\n\nneed a higher limit...", 0.66),
+        RetrievedChunk("billing-refunds", "Billing and Refunds", "# Billing and Refunds\n\nSubscriptions renew...", 0.63),
+        RetrievedChunk("gone", "Gone", "a chunk from an article no longer on disk", 0.6),
+    ]
+    out = whole_articles(chunks)
+    assert [(c.doc_id, c.score) for c in out] == [("api-rate-limits", 0.69), ("billing-refunds", 0.63), ("gone", 0.6)]
+    # The failed-payment paragraph that the refund chunk lacked comes with the whole article.
+    assert out[1].text == f"# {billing.title}\n\n{billing.text}" and "we retry the payment three times" in out[1].text
+    assert out[2].text == "a chunk from an article no longer on disk"
