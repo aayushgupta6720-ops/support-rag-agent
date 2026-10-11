@@ -275,7 +275,7 @@ _V3_EXAMPLE = (
     "\"what about annual plans?\" "
     "after a question about refunds becomes \"refund policy for annual plans\"."
 )
-ROUTER_PROMPT_VERSION = "router_v5"
+ROUTER_PROMPT_VERSION_V5 = "router_v5"
 ROUTER_SYSTEM_PROMPT_V5 = ROUTER_SYSTEM_PROMPT_V4.replace(
     _V3_EXAMPLE,
     "a follow-up like \"what about the other one?\" becomes a query that names "
@@ -283,6 +283,8 @@ ROUTER_SYSTEM_PROMPT_V5 = ROUTER_SYSTEM_PROMPT_V4.replace(
 )
 assert ROUTER_SYSTEM_PROMPT_V5 != ROUTER_SYSTEM_PROMPT_V4, "router_v5 must replace v4's example"
 
-ROUTER_SYSTEM_PROMPT = ROUTER_SYSTEM_PROMPT_V5
+# v5 isn't in use until an eval shows it routes as well as v4.
+ROUTER_PROMPT_VERSION = ROUTER_PROMPT_VERSION_V4
+ROUTER_SYSTEM_PROMPT = ROUTER_SYSTEM_PROMPT_V4
 DIRECT_ANSWER_SYSTEM_PROMPT = DIRECT_ANSWER_SYSTEM_PROMPT_V3
 GROUNDED_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT_V7
