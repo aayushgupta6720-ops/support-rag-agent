@@ -311,3 +311,22 @@ def test_eval_runs_only_with_the_deployed_retrieval_settings(monkeypatch):
     monkeypatch.setattr(settings, "retrieval_expand_docs", False)
     monkeypatch.setattr(settings, "retrieval_top_k", 6)
     assert settings_differing_from_render() == {"RETRIEVAL_TOP_K": (6.0, 4.0)}
+
+
+def test_conflicting_articles_stay_out_of_the_live_help_center():
+    import json
+    from pathlib import Path
+
+    from app.rag.documents import load_documents as load_from
+
+    conflicts = Path(__file__).resolve().parent.parent / "data" / "eval" / "conflicts"
+    live = {doc.doc_id for doc in load_from()}
+    stale = {doc.doc_id for doc in load_from(conflicts / "docs")}
+    assert stale and not live & stale  # they'd mislead real visitors
+    cases = [json.loads(line) for line in (conflicts / "cases.jsonl").read_text().splitlines() if line.strip()]
+    assert {c["category"] for c in cases} == {"conflicting", "conflict_control"}
+    for case in cases:
+        assert set(case["expected_doc_ids"]) <= live | stale, case["id"]
+        # A conflict case names one live article and the stale one that contradicts it.
+        if case["category"] == "conflicting":
+            assert len(set(case["expected_doc_ids"]) & live) == 1 and len(set(case["expected_doc_ids"]) & stale) == 1

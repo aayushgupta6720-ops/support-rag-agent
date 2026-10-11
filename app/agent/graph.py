@@ -152,6 +152,12 @@ def get_agent_graph():
 
 
 async def run_agent(query: str, history: list[Turn] | None = None) -> AgentState:
+    """Answer a question with the agent AGENT_MODE names: this router agent,
+    or the tool loop (app/agent/loop.py). Both return the same shape."""
+    if get_settings().agent_mode == "loop":
+        from app.agent.loop import run_loop_agent
+
+        return await run_loop_agent(query, history)
     return await get_agent_graph().ainvoke({"query": query, "history": history or []})
 
 

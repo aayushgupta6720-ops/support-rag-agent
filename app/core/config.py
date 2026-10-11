@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     # chunk of the billing article never came back for "payment fails
     # downgrade API rate limit", though the article's refund chunk did.
     retrieval_expand_docs: bool = False
+    # How the agent works. "router": one call decides whether to search, the
+    # search runs once, and a second call answers. "loop": one model calls
+    # tools (search, read an article, give the answer) until it answers, at
+    # most agent_max_steps calls before it must answer (app/agent/loop.py).
+    agent_mode: str = "router"
+    agent_max_steps: int = 4
     chunk_max_chars: int = 800
     chunk_overlap_chars: int = 100
 

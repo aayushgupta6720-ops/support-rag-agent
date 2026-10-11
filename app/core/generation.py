@@ -36,10 +36,12 @@ def _generate_sync(
     system_instruction: str,
     tools: list[types.Tool] | None = None,
     response_schema: type[BaseModel] | None = None,
+    tool_config: types.ToolConfig | None = None,
 ) -> types.GenerateContentResponse:
     config = types.GenerateContentConfig(
         system_instruction=system_instruction,
         tools=tools,
+        tool_config=tool_config,
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         response_mime_type="application/json" if response_schema else None,
         response_schema=response_schema,
@@ -84,6 +86,24 @@ async def generate(
         system_instruction=system_instruction,
         tools=tools,
         response_schema=response_schema,
+    )
+
+
+async def generate_contents(
+    *,
+    contents: list[types.Content],
+    system_instruction: str,
+    tools: list[types.Tool] | None = None,
+    tool_config: types.ToolConfig | None = None,
+) -> types.GenerateContentResponse:
+    """A call on a whole conversation so far, tool calls and their results
+    included, for the tool loop."""
+    return await asyncio.to_thread(
+        _generate_sync,
+        contents=contents,
+        system_instruction=system_instruction,
+        tools=tools,
+        tool_config=tool_config,
     )
 
 
