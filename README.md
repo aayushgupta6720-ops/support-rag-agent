@@ -186,6 +186,22 @@ python -m scripts.eval
 Pass case ids or categories to run only those, e.g. `python -m scripts.eval
 multi_turn greeting_1`.
 
+Three more scripts check what that run can't:
+
+- `python -m scripts.cross_judge <results.json>` re-grades a finished run's
+  answers with a judge from another model family (an open-weights Gemma
+  model, on its own free-tier quota), given exactly what the eval's judge
+  saw, and reports how often the two agree.
+- `python -m scripts.full_context_baseline` answers the questions with every
+  article in the prompt and no retrieval. The whole help center is about
+  8,700 characters, so this is cheap, and it shows what retrieval costs:
+  where the agent falls short of it, retrieval left something out.
+- `python -m scripts.eval_chat` plays the multi-turn cases through the real
+  `/chat` endpoint in process: the earlier messages go through one session
+  and the agent writes its own earlier answers. It checks that the session
+  hands back every earlier turn and that a repeated first question comes
+  from the answer cache.
+
 It reports a judge pass rate, a pass rate per category, and these retrieval
 metrics, computed over the cases that expect particular docs:
 
@@ -226,26 +242,40 @@ passes. Lowering the judge's temperature was the other option, but
 Gemini 3 models at the default 1.0, warning that lower values can cause
 looping, so it wasn't used.
 
-The golden set (`data/eval/golden_set.jsonl`) has 115 cases. Most of them test
+**A second judge.** The judge and the agent are both Gemini, and a passing
+verdict is never rechecked, so the run of 2026-10-11 was re-graded by
+`gemma-4-26b-a4b-it` (`scripts/cross_judge.py`). It saw the same
+instructions, references and retrieved chunks; retrieval was re-run from the
+saved search queries and matched the run's on all 115 cases. The two agreed
+on 113 of 115 (98%, Cohen's kappa 0.66; kappa is modest because there are so
+few failures to agree on). Both failed the two retrieval misses. Gemma also
+failed two answers Gemini passed: `password_reset_no_email` left out the
+route through support with ID for someone who no longer has the email, and
+`multi_doc_delete_within_refund_window` could be read as saying deletion
+refunds automatically, when a refund needs a ticket. So by the stricter judge
+the run is 111/115. A sample of 30 answers is being labelled by hand to see
+which judge a person agrees with.
+
+The golden set (`data/eval/golden_set.jsonl`) has 127 cases. Most of them test
 failure modes, not whether the model can find the answer to an easy question:
 
 | Category | Cases | What it checks |
 |---|---|---|
-| `grounded` | 28 | Answer is in one doc, including details beyond the headline fact |
-| `reasoning` | 17 | Applying a policy to the user's situation ("I bought annual 3 weeks ago — refund?") |
-| `false_premise` | 11 | Question assumes something the docs contradict ("SMS 2FA setup?") |
-| `multi_doc` | 11 | A complete answer needs facts from two docs |
-| `unanswerable` | 10 | In-domain but not in the docs — must not invent a price, phone number, etc. |
+| `grounded` | 31 | Answer is in one doc, including details beyond the headline fact |
+| `reasoning` | 20 | Applying a policy to the user's situation ("I bought annual 3 weeks ago — refund?") |
+| `false_premise` | 12 | Question assumes something the docs contradict ("SMS 2FA setup?") |
+| `multi_doc` | 14 | A complete answer needs facts from two docs |
+| `unanswerable` | 11 | In-domain but not in the docs — must not invent a price, phone number, etc. |
 | `out_of_scope` | 6 | Not a support question — should stay in role |
 | `adversarial` | 10 | Prompt injection and social engineering |
 | `robustness` | 5 | Typos, Spanish, vague phrasing |
 | `direct` | 7 | Greetings and small talk — no retrieval |
-| `multi_turn` | 10 | A follow-up that only makes sense with the earlier turns ("What about annual plans?"), a topic switch, and a false premise after pushback |
+| `multi_turn` | 11 | A follow-up that only makes sense with the earlier turns ("What about annual plans?"), a topic switch, and a false premise after pushback |
 
 Every case belongs to a split:
 
 - **`dev`** (86 cases): the cases prompts and settings were tuned against.
-- **`held_out`** (29 cases): written before the latest change and never used
+- **`held_out`** (41 cases): written before the latest change and never used
   to tune it, so they show whether the change generalizes rather than
   fitting the dev cases.
 
@@ -257,7 +287,9 @@ and that v5 hedged. The 11 `h2_*` ones were written before
 user's situation. A review pointed out they were nearly all one kind of
 case, so 18 more (`h3_*`) were written before `grounded_answer_v7`,
 across every category, multi-turn included; `grounded_answer_v6` passed
-all 18. Run one split with `python -m scripts.eval held_out`.
+all 18. On 2026-10-11, 12 more (`h4_*`) were written before any change to
+retrieval, mostly answers that need two articles or a policy applied to a
+situation. Run one split with `python -m scripts.eval held_out`.
 
 Pass rates are per category because an aggregate hides the weak spots. With
 this few cases per category, treat a single run as a smoke signal, not a
