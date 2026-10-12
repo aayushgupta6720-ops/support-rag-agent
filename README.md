@@ -37,10 +37,11 @@ app/
     ingest.py           Chunk + title-prefix + embed + upsert documents
     retrieval.py        Embed a query and fetch top-k chunks
   agent/
-    graph.py           LangGraph agent: route -> (retrieve) -> generate
+    graph.py           LangGraph agent: route -> (retrieve) -> generate (AGENT_MODE=router, live)
+    loop.py            LangGraph tool loop: agent <-> tools until give_answer (AGENT_MODE=loop)
     history.py         Earlier conversation turns, as Gemini contents
     prompts.py         Versioned system prompts
-    tools.py           search_support_docs tool declaration
+    tools.py           search_support_docs, read_article and give_answer declarations
   eval/
     dataset.py         Loads data/eval/golden_set.jsonl
     judge.py           LLM-as-judge: grades an answer against a reference, majority vote on failures
@@ -96,10 +97,20 @@ Re-running it is safe: chunk IDs are deterministic, so changed docs are
 overwritten in place, chunks left over when a doc gets shorter are deleted,
 and docs removed from `data/docs/` are removed from Qdrant too.
 
-Then `POST /chat` with `{"query": "..."}`. A LangGraph agent routes the query:
-a router call decides whether to call the `search_support_docs` tool or
-answer directly (e.g. for greetings), then a generation call produces a
-structured, schema-validated answer grounded in whatever was retrieved.
+Then `POST /chat` with `{"query": "..."}`. The live agent (`AGENT_MODE=router`)
+is a LangGraph router plus RAG: a router call decides whether to call the
+`search_support_docs` tool or answer directly (e.g. for greetings), then a
+generation call produces a structured, schema-validated answer grounded in
+whatever was retrieved. It makes exactly one decision and at most one search.
+
+`AGENT_MODE=loop` is a real tool loop instead (`app/agent/loop.py`): one model
+calls tools until it answers. It can search as many times as it needs, with
+its own queries; read a whole article with `read_article` when a search found
+the right one but not the passage it needs; and it ends the turn only by
+calling `give_answer` with its reply and the ids of the articles it used.
+Every turn must be a tool call, so an answer always comes with its sources,
+and after four steps it may only answer. Both modes return the same shape, so
+`/chat`, the answer cache and every eval work with either.
 
 Or open `http://localhost:8000/` for the help center. It's a page for a
 fictional company, Tidewell, with topic cards, a search box, and a chat
@@ -340,6 +351,47 @@ Each run's summary (settings, rates, cost, failed and errored cases) is
 committed under `data/eval/summaries/`; the full answers stay in the
 gitignored `data/eval/results/`. Since 2026-10-10 the summary includes what
 the run would have cost on a paid key, judge included.
+
+**Router + RAG or a tool loop?** (2026-10-12, `gemini-3.5-flash-lite`, gap
+0.10.) The two agents on the same cases:
+
+| Cases | Router (live) | Tool loop |
+|---|---|---|
+| Held-out, all 41 | 41/41 | 41/41 |
+| Multi-doc, all 14 | 12/14 | 14/14 |
+| Conflicting articles (4) | 0/4 | 4/4 |
+| No-conflict controls (3) | 3/3 | 2/3 |
+| Model calls per question | 2.00 | 2.0–2.75 (2.4 on multi-doc) |
+
+- **Where the loop helps is retrieval.** The router's two multi-doc misses
+  (above) were passages its one search didn't return. The loop searched again
+  with a second query and found the failed-payment passage for
+  `multi_doc_downgrade_rate_limit`, and its query for
+  `ho_unrecognized_signin` found the password-reset article.
+- **The conflict gap is mostly the prompt.** The loop's prompt (`agent_v1`)
+  says what to do when articles disagree; the router's (`grounded_answer_v7`)
+  doesn't, and it picked one article silently every time, once the stale one
+  (an announcement of 2,000 requests a minute). With that one rule added
+  (`grounded_answer_v8`, a candidate not in use) the router scored 3/4. Both
+  agents over-apply the rule once: asked about monthly refunds, they gave the
+  right 7 days but warned that the articles disagree about annual refunds.
+  That control is left as a failure rather than tuned away.
+- **The conflict cases** (`python -m scripts.eval_conflicts`) run against
+  their own Qdrant collection: the live articles plus three stale ones dated
+  as real stale pages are (a 2024 billing FAQ, a 2023 page on text-message
+  sign-in codes, a 2026 announcement of higher API limits), so the live help
+  center never holds them.
+- **Whole articles in the router** (`RETRIEVAL_EXPAND_DOCS=true`, not in use)
+  fixed the same two misses on the 23 multi-doc and `h4_*` cases but broke
+  one that passes without it (`h4_monthly_to_annual_today`): 22/23.
+- **The full-context baseline** (every article in the prompt, no retrieval)
+  scored 40/40 on the held-out split, with one case cut off by the day's
+  quota. Retrieval costs nothing there; its losses are the dev cases above.
+- **Not yet decided:** the loop hasn't run on the 86 dev cases, and those hold
+  most of the adversarial, off-topic and small-talk questions, where a model
+  free to search or not could regress. Until it has, the live agent stays the
+  router. The loop also makes more calls on hard questions (up to five), so
+  switching would mean lowering the daily question budget.
 
 **Latest full run** (2026-10-11; `gemini-3.5-flash-lite`, 115 cases,
 `router_v4`, `direct_answer_v3`, `grounded_answer_v7`, `judge_v2`,

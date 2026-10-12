@@ -1,0 +1,70 @@
+{
+  "run": {
+    "git_commit": "3c6b21d-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "router",
+    "router_prompt": "router_v4",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 12,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.9545454545454546,
+  "hit_at_1": 0.9090909090909091,
+  "context_precision": 0.6742424242424243,
+  "citation_precision": 0.9545454545454546,
+  "citation_recall": 0.9090909090909091,
+  "spurious_citations": [],
+  "cost_usd": {
+    "agent": 0.008794,
+    "judge": 0.004403,
+    "total": 0.013197
+  },
+  "model_requests": 36,
+  "agent_requests": 24,
+  "by_split": {
+    "held_out": {
+      "passed": 12,
+      "total": 12
+    }
+  },
+  "by_category": {
+    "false_premise": {
+      "passed": 1,
+      "total": 1
+    },
+    "grounded": {
+      "passed": 3,
+      "total": 3
+    },
+    "multi_doc": {
+      "passed": 3,
+      "total": 3
+    },
+    "multi_turn": {
+      "passed": 1,
+      "total": 1
+    },
+    "reasoning": {
+      "passed": 3,
+      "total": 3
+    },
+    "unanswerable": {
+      "passed": 1,
+      "total": 1
+    }
+  },
+  "failed": [],
+  "errored": []
+}

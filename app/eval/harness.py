@@ -33,7 +33,8 @@ def score_retrieval(expected_doc_ids: list[str], sources: list[str]) -> Retrieva
 
 
 # Trace steps that are a chat-model request (embedding calls are another quota).
-MODEL_STEPS = {"route", "generate", "judge"}
+# "agent" is the tool loop's call (AGENT_MODE=loop); "route" and "generate" the router's.
+MODEL_STEPS = {"route", "generate", "agent", "judge"}
 
 
 @dataclass
@@ -70,6 +71,10 @@ class EvalCaseResult:
     agent_cost_usd: float = 0.0
     judge_cost_usd: float = 0.0
     model_requests: int = 0
+    # The agent's own model calls (the judge's left out), and in loop mode the
+    # tools it called, in order: what a question costs the live daily budget.
+    agent_requests: int = 0
+    tool_calls: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -137,6 +142,10 @@ class EvalReport:
     def model_requests(self) -> int:
         return sum(r.model_requests for r in self.results)
 
+    @property
+    def agent_requests(self) -> int:
+        return sum(r.agent_requests for r in self.results)
+
     def spurious_citations(self) -> list[str]:
         """Cases with nothing to find whose answer still cited a doc."""
         return [r.case.id for r in self.results if not r.case.expected_doc_ids and r.cited_sources]
@@ -199,6 +208,8 @@ async def run_case(case: EvalCase) -> EvalCaseResult:
         agent_cost_usd=round(sum(s.cost_usd for s in trace.steps if s.name != "judge"), 8),
         judge_cost_usd=round(sum(s.cost_usd for s in trace.steps if s.name == "judge"), 8),
         model_requests=sum(s.name in MODEL_STEPS for s in trace.steps),
+        agent_requests=sum(s.name in MODEL_STEPS - {"judge"} for s in trace.steps),
+        tool_calls=list(result.get("tool_calls") or []),
     )
 
 

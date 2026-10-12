@@ -1,0 +1,60 @@
+{
+  "run": {
+    "git_commit": "3c6b21d-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "loop",
+    "agent_prompt": "agent_v1",
+    "agent_max_steps": 4,
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 14,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.875,
+  "hit_at_1": 0.75,
+  "context_precision": 0.625,
+  "citation_precision": 0.9166666666666666,
+  "citation_recall": 1.0,
+  "spurious_citations": [],
+  "cost_usd": {
+    "agent": 0.007199,
+    "judge": 0.002314,
+    "total": 0.009513
+  },
+  "model_requests": 15,
+  "agent_requests": 11,
+  "by_split": {
+    "dev": {
+      "passed": 4,
+      "total": 4
+    }
+  },
+  "by_category": {
+    "multi_doc": {
+      "passed": 4,
+      "total": 4
+    }
+  },
+  "failed": [],
+  "errored": [
+    "multi_doc_upgrade_for_limits",
+    "ho_export_before_deleting",
+    "ho_unrecognized_signin",
+    "h3_failed_payment_emails",
+    "h3_scripted_nightly_export",
+    "h3_refund_on_invoices",
+    "h3_developer_left_keys",
+    "h4_downgrade_then_export",
+    "h4_lockout_reset_signs_out",
+    "h4_export_in_grace_period"
+  ]
+}

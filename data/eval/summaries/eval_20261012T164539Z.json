@@ -1,0 +1,49 @@
+{
+  "run": {
+    "git_commit": "3c6b21d-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "loop",
+    "agent_prompt": "agent_v1",
+    "agent_max_steps": 4,
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 1,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 1.0,
+  "hit_at_1": 1.0,
+  "context_precision": 0.5,
+  "citation_precision": 1.0,
+  "citation_recall": 1.0,
+  "spurious_citations": [],
+  "cost_usd": {
+    "agent": 0.001186,
+    "judge": 0.000446,
+    "total": 0.001632
+  },
+  "model_requests": 3,
+  "agent_requests": 2,
+  "by_split": {
+    "held_out": {
+      "passed": 1,
+      "total": 1
+    }
+  },
+  "by_category": {
+    "multi_doc": {
+      "passed": 1,
+      "total": 1
+    }
+  },
+  "failed": [],
+  "errored": []
+}

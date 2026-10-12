@@ -30,7 +30,9 @@ from pathlib import Path
 os.environ["QDRANT_COLLECTION"] = "support_docs_conflicts"  # before the settings load
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import app.agent.graph as graph  # noqa: E402
 import app.agent.loop as loop  # noqa: E402
+from app.agent import prompts  # noqa: E402
 from app.agent.graph import run_agent  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.eval.judge import judge_answer  # noqa: E402
@@ -82,6 +84,7 @@ async def main() -> int:
         return {"passed": sum(r["correct"] for r in group), "total": len(group)}
     summary = {
         "run": {"git_commit": _git_commit(), "agent_mode": settings.agent_mode, "generation_model": settings.generation_model,
+                "prompt": prompts.AGENT_PROMPT_VERSION if settings.agent_mode == "loop" else graph.GROUNDED_ANSWER_PROMPT_VERSION,
                 "collection": settings.qdrant_collection, "retrieval_max_score_gap": settings.retrieval_max_score_gap,
                 "retrieval_expand_docs": settings.retrieval_expand_docs, "cases": len(cases)},
         "conflicting": rate("conflicting"),

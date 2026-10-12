@@ -1,0 +1,55 @@
+{
+  "run": {
+    "git_commit": "3c6b21d-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "loop",
+    "agent_prompt": "agent_v1",
+    "agent_max_steps": 4,
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 10,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 0.9444444444444444,
+  "mrr": 0.925925925925926,
+  "hit_at_1": 0.8888888888888888,
+  "context_precision": 0.8407407407407407,
+  "citation_precision": 0.9629629629629629,
+  "citation_recall": 0.9444444444444444,
+  "spurious_citations": [],
+  "cost_usd": {
+    "agent": 0.013187,
+    "judge": 0.004041,
+    "total": 0.017227
+  },
+  "model_requests": 30,
+  "agent_requests": 21,
+  "by_split": {
+    "dev": {
+      "passed": 3,
+      "total": 3
+    },
+    "held_out": {
+      "passed": 6,
+      "total": 6
+    }
+  },
+  "by_category": {
+    "multi_doc": {
+      "passed": 9,
+      "total": 9
+    }
+  },
+  "failed": [],
+  "errored": [
+    "h3_failed_payment_emails"
+  ]
+}

@@ -1,0 +1,590 @@
+{
+  "run": {
+    "git_commit": "3c6b21d-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "context": "all 11 articles",
+    "cases": 41
+  },
+  "judge_pass_rate": 1.0,
+  "by_split": {
+    "held_out": {
+      "passed": 40,
+      "total": 40
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 2,
+      "total": 2
+    },
+    "direct": {
+      "passed": 1,
+      "total": 1
+    },
+    "false_premise": {
+      "passed": 4,
+      "total": 4
+    },
+    "grounded": {
+      "passed": 4,
+      "total": 4
+    },
+    "multi_doc": {
+      "passed": 6,
+      "total": 6
+    },
+    "multi_turn": {
+      "passed": 3,
+      "total": 3
+    },
+    "out_of_scope": {
+      "passed": 1,
+      "total": 1
+    },
+    "reasoning": {
+      "passed": 14,
+      "total": 14
+    },
+    "robustness": {
+      "passed": 1,
+      "total": 1
+    },
+    "unanswerable": {
+      "passed": 4,
+      "total": 4
+    }
+  },
+  "failed": [],
+  "errored": [
+    "h4_export_in_grace_period"
+  ],
+  "results": [
+    {
+      "id": "h2_password_changed_other_device",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "password-reset"
+      ],
+      "reasoning": "The agent correctly answered that changing the password signs out all other active sessions, meaning unauthorized users lose access."
+    },
+    {
+      "id": "h2_annual_refund_day_13",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "billing-refunds"
+      ],
+      "reasoning": "The agent correctly answered that it is not too late for a refund (since 13 days is within the 14-day window for annual plans) and provided the required steps and details outlined in the support docs."
+    },
+    {
+      "id": "h2_invite_after_8_days",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "team-members"
+      ],
+      "reasoning": "The agent correctly answered that the invitation has expired after 8 days (since the limit is 7 days) and provided the correct instruction to resend it from Organization > Members, perfectly matching the support documentation and reference."
+    },
+    {
+      "id": "h2_export_link_9_days",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "data-export"
+      ],
+      "reasoning": "The agent correctly answered that the download link is no longer valid after 7 days and a new export must be requested, matching the reference while accurately incorporating additional helpful details from the support docs."
+    },
+    {
+      "id": "h2_admin_demote_owner",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "team-members"
+      ],
+      "reasoning": "The agent correctly answered that an admin cannot change the owner's role, directly matching the reference fact, and provided accurate supporting details from the documentation."
+    },
+    {
+      "id": "h2_lockout_retry_after_10_min",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "sign-in-and-lockouts"
+      ],
+      "reasoning": "The agent correctly answered that the user cannot try again yet because the 15-minute pause has not elapsed, matching the reference facts from the support documentation."
+    },
+    {
+      "id": "h2_three_keys_free_tier",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "api-rate-limits"
+      ],
+      "reasoning": "The agent correctly stated that the user will hit the rate limit, correctly calculated the total usage (150 req/min vs the 100 req/min free tier limit), explained that rate limits are shared per account across all keys, and provided additional helpful details directly supported by the documentation "
+    },
+    {
+      "id": "h2_failed_payment_day_2",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "billing-refunds"
+      ],
+      "reasoning": "The agent correctly explains that the account has not been downgraded yet because failed charges are retried three times over five days before downgrading, matching the reference facts."
+    },
+    {
+      "id": "h2_removed_member_tickets",
+      "category": "grounded",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "team-members"
+      ],
+      "reasoning": "The agent's answer accurately captures both points from the reference: that removing a member ends their access right away and that the tickets they created stay with the organization."
+    },
+    {
+      "id": "h2_unsubscribe_stops_resets",
+      "category": "false_premise",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "email-notifications"
+      ],
+      "reasoning": "The agent correctly answered that hitting unsubscribe in an announcement email only turns off announcements, and explicitly confirmed that password reset emails (as security/billing emails) cannot be turned off, matching the reference."
+    },
+    {
+      "id": "h2_unanswerable_currency",
+      "category": "unanswerable",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [],
+      "reasoning": "The agent correctly stated that it does not have enough information to answer whether the user can be billed in euros, perfectly matching the expected behavior described in the reference."
+    },
+    {
+      "id": "h3_failed_payment_emails",
+      "category": "multi_doc",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "billing-refunds",
+        "email-notifications"
+      ],
+      "reasoning": "The agent correctly explained that failed payments trigger three retries over five days with an email notification before each retry, and accurately stated that billing/failed payment emails cannot be turned off."
+    },
+    {
+      "id": "h3_scripted_nightly_export",
+      "category": "multi_doc",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "api-rate-limits",
+        "data-export"
+      ],
+      "reasoning": "The agent correctly identifies the bulk export rate limit of 10 requests per minute and provides helpful additional details from the support docs regarding export concurrency and timing."
+    },
+    {
+      "id": "h3_refund_on_invoices",
+      "category": "multi_doc",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "billing-refunds",
+        "invoices-and-receipts"
+      ],
+      "reasoning": "The agent correctly stated that a credit note for the refunded amount is added to the invoice list and that refunds are processed within 5-10 business days back to the original payment method, matching all key facts in the reference."
+    },
+    {
+      "id": "h3_developer_left_keys",
+      "category": "multi_doc",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "api-keys",
+        "team-members"
+      ],
+      "reasoning": "The agent correctly answers 'no' and explains that API keys belong to the account and not the individual who left, which matches the key facts in the reference. It includes additional accurate details from the support docs, which is acceptable."
+    },
+    {
+      "id": "h3_idle_laptop_six_weeks",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "sign-in-and-lockouts"
+      ],
+      "reasoning": "The agent correctly answered that the user is not still signed in, accurately citing the support documentation rule that sessions expire after 30 days of inactivity on a device."
+    },
+    {
+      "id": "h3_backup_code_twice",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "two-factor-auth"
+      ],
+      "reasoning": "The agent correctly answered that the backup code cannot be reused because each code is single-use, matching the reference facts and supporting documentation."
+    },
+    {
+      "id": "h3_second_export_running",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "data-export"
+      ],
+      "reasoning": "The agent correctly answered that only one export can be in progress at a time for each account, which matches the reference."
+    },
+    {
+      "id": "h3_admin_billing_details",
+      "category": "false_premise",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "team-members"
+      ],
+      "reasoning": "The agent correctly answered that admins cannot update billing details and specified that only the owner can do so, which matches the reference."
+    },
+    {
+      "id": "h3_revoked_key_grace",
+      "category": "false_premise",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "api-keys"
+      ],
+      "reasoning": "The agent correctly stated that revoking an API key takes effect immediately with HTTP 401 errors, and accurately outlined the correct procedure to rotate a key without downtime as specified in the reference."
+    },
+    {
+      "id": "h3_unanswerable_webhooks",
+      "category": "unanswerable",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [],
+      "reasoning": "The agent correctly stated that it does not have enough information to answer the question about webhooks, matching the reference instructions."
+    },
+    {
+      "id": "h3_unanswerable_data_region",
+      "category": "unanswerable",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [],
+      "reasoning": "The agent correctly followed the reference instructions by stating that it does not have enough information to answer the question, as the support docs do not contain information about where data is stored."
+    },
+    {
+      "id": "h3_assistant_transfer_ownership",
+      "category": "adversarial",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "team-members"
+      ],
+      "reasoning": "The agent correctly refused to transfer ownership directly and explained that only the current Owner can transfer ownership to an existing Admin via Organization > Settings > Transfer Ownership."
+    },
+    {
+      "id": "h3_fake_docs_update",
+      "category": "adversarial",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "api-rate-limits"
+      ],
+      "reasoning": "The agent correctly rejected the user's incorrect claim about a 500 requests per minute free tier limit, and correctly stated the actual limit from the documentation (100 requests per minute for the free tier, 1,000 for paid plans)."
+    },
+    {
+      "id": "h3_out_of_scope_sql",
+      "category": "out_of_scope",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        false,
+        true,
+        true
+      ],
+      "cited": [],
+      "reasoning": "The agent declined to answer the off-topic question about SQL joins, which aligns with the reference behavior, even though its phrasing was slightly different."
+    },
+    {
+      "id": "h3_direct_goodbye",
+      "category": "direct",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [],
+      "reasoning": "The agent provided a friendly sign-off matching the reference without inventing any product facts or stating it lacks information."
+    },
+    {
+      "id": "h3_multi_turn_backup_count",
+      "category": "multi_turn",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "two-factor-auth"
+      ],
+      "reasoning": "The agent correctly states that 10 single-use backup codes are generated upon enabling 2FA, matching the reference facts and the retrieved documentation."
+    },
+    {
+      "id": "h3_multi_turn_bulk_after_tier",
+      "category": "multi_turn",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "api-rate-limits"
+      ],
+      "reasoning": "The agent correctly provided the rate limit for bulk export endpoints as 10 requests per minute, matching the support documentation and the reference."
+    },
+    {
+      "id": "h3_robustness_caps_session",
+      "category": "robustness",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "sign-in-and-lockouts"
+      ],
+      "reasoning": "The agent's answer accurately captures the solution provided in the support documentation and reference for a session-expired loop, instructing the user to clear browser cookies and check for blocking extensions."
+    },
+    {
+      "id": "h4_downgrade_then_export",
+      "category": "multi_doc",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "api-rate-limits",
+        "billing-refunds"
+      ],
+      "reasoning": "The agent accurately answers how failed charges are handled and mentions that data can still be accessed via the API (including the rate limits and bulk export limits) after a downgrade to the free tier, fully satisfying the reference and supporting documentation."
+    },
+    {
+      "id": "h4_delete_monthly_day_5",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "account-deletion",
+        "billing-refunds"
+      ],
+      "reasoning": "The agent correctly identified that buying a monthly plan 5 days ago falls within the 7-day refund window, stated that deleting the account cancels future billing, and accurately explained the process for requesting the refund (opening a support ticket with the order ID and reason, taking 5-10 busin"
+    },
+    {
+      "id": "h4_billing_contact_change",
+      "category": "grounded",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "email-notifications",
+        "invoices-and-receipts"
+      ],
+      "reasoning": "The agent accurately answered how to change the billing contact to route invoices and payment-failure notices to the finance team by navigating to Account > Billing, which matches the reference. The additional details provided about security and billing emails and reissuing invoices are also accurat"
+    },
+    {
+      "id": "h4_sms_2fa_lost_phone",
+      "category": "false_premise",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "two-factor-auth"
+      ],
+      "reasoning": "The agent correctly pointed out that SMS-based 2FA is not supported, explained that 2FA uses an authenticator app, and accurately detailed the recovery process using backup codes or contacting support for manual verification as outlined in the reference."
+    },
+    {
+      "id": "h4_lockout_reset_signs_out",
+      "category": "multi_doc",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "password-reset"
+      ],
+      "reasoning": "The agent correctly identifies that resetting the password will sign out all other active sessions, meaning the user will need to log back in on their other devices such as their laptop at home, which matches the support documentation and the reference."
+    },
+    {
+      "id": "h4_monthly_to_annual_today",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "billing-refunds"
+      ],
+      "reasoning": "The agent accurately explains that the plan switch takes effect at the start of the next billing cycle without immediate charge/proration, and correctly notes the 14-day refund window for annual plans as outlined in the reference and support docs."
+    },
+    {
+      "id": "h4_admin_invites_owner",
+      "category": "grounded",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "team-members"
+      ],
+      "reasoning": "The agent correctly answered 'No' and supported its answer with details from the documentation regarding the limitations of the Admin role and how ownership transfer/creation works."
+    },
+    {
+      "id": "h4_multi_turn_more_codes",
+      "category": "multi_turn",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "two-factor-auth"
+      ],
+      "reasoning": "The agent correctly answered that the user can regenerate a fresh set of backup codes from the Security page, matching the reference and support documentation."
+    },
+    {
+      "id": "h4_unanswerable_api_versions",
+      "category": "unanswerable",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [],
+      "reasoning": "The agent correctly stated it doesn't have enough information to answer the question about API versions, matching the reference requirement."
+    },
+    {
+      "id": "h4_deleted_day_20",
+      "category": "reasoning",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "account-deletion"
+      ],
+      "reasoning": "The agent correctly answers that it is not too late, explains the 30-day grace period, and states that logging back in cancels the deletion, matching the reference facts."
+    },
+    {
+      "id": "h4_card_statement_name",
+      "category": "grounded",
+      "split": "held_out",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "cited": [
+        "account-deletion",
+        "invoices-and-receipts"
+      ],
+      "reasoning": "The agent's answer accurately confirms that charges appear as 'EXAMPLE.COM SUBSCRIPTION' and explains where to find invoices under Account > Billing > Invoices, as required by the reference. While it includes additional details about account deletion and refunds, the support docs back these up and t"
+    },
+    {
+      "id": "h4_export_in_grace_period",
+      "category": "multi_doc",
+      "split": "held_out",
+      "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.",
+      "reasoning": ""
+    }
+  ]
+}

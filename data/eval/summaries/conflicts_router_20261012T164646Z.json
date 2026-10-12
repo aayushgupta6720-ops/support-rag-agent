@@ -1,0 +1,171 @@
+{
+  "run": {
+    "git_commit": "3c6b21d-dirty",
+    "agent_mode": "router",
+    "generation_model": "gemini-3.5-flash-lite",
+    "prompt": "grounded_answer_v8",
+    "collection": "support_docs_conflicts",
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "cases": 7
+  },
+  "conflicting": {
+    "passed": 3,
+    "total": 4
+  },
+  "controls": {
+    "passed": 2,
+    "total": 3
+  },
+  "failed": [
+    "conflict_sms_2fa",
+    "control_monthly_refund"
+  ],
+  "errored": [],
+  "results": [
+    {
+      "id": "conflict_annual_refund",
+      "category": "conflicting",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "saw_both": true,
+      "retrieved": [
+        "billing-faq-2024",
+        "billing-refunds"
+      ],
+      "cited": [
+        "billing-faq-2024",
+        "billing-refunds"
+      ],
+      "tool_calls": null,
+      "answer": "Our help articles disagree about the refund window for annual plans. The Billing FAQ (2024) states that annual plans can be refunded within 30 days of purchase by contacting support with your order ID. However, the Billing and Refunds article states that full refunds for annual plans are offered within 14 days of purchase, no questions asked, by opening a support ticket with your order ID and the reason for the request (processed within 5-10 business days). We suggest confirming with support before relying on either timeframe.",
+      "reasoning": "The agent correctly identified that the articles disagree, provided both timeframes (30 days and 14 days), and suggested confirming with support, matching all the requirements in the reference."
+    },
+    {
+      "id": "conflict_failed_payment_retries",
+      "category": "conflicting",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "saw_both": true,
+      "retrieved": [
+        "billing-faq-2024",
+        "billing-refunds",
+        "api-rate-limits",
+        "account-deletion"
+      ],
+      "cited": [
+        "billing-faq-2024",
+        "billing-refunds"
+      ],
+      "tool_calls": null,
+      "answer": "Our help articles disagree on the details for failed payments. One guide states that we retry the payment twice over three days (updated March 2024), while another guide states that we retry the payment three times over five days (sending an email notification before each retry) before downgrading the account to the free tier. We suggest confirming with support before relying on either schedule.",
+      "reasoning": "The agent correctly identified that the articles disagree, provided both retry schedules found in the retrieved documents, and suggested confirming with support, exactly as required by the reference."
+    },
+    {
+      "id": "conflict_sms_2fa",
+      "category": "conflicting",
+      "correct": false,
+      "votes": [
+        false,
+        false
+      ],
+      "saw_both": true,
+      "retrieved": [
+        "sms-sign-in-codes",
+        "two-factor-auth"
+      ],
+      "cited": [
+        "two-factor-auth"
+      ],
+      "tool_calls": null,
+      "answer": "No, SMS based 2FA is not supported. You can enable 2FA under Account > Security using an authenticator app, and we support any TOTP-compatible app such as Google Authenticator or Authy.",
+      "reasoning": "The reference explicitly states that because the retrieved articles disagree (one says SMS is supported, the other says it is not), a correct answer must mention this conflict and provide both details, suggesting confirmation with support. The agent only stated that SMS-based 2FA is not supported, ignoring the conflicting article about text message codes."
+    },
+    {
+      "id": "conflict_paid_rate_limit",
+      "category": "conflicting",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "saw_both": true,
+      "retrieved": [
+        "api-rate-limits",
+        "paid-plan-api-limits-2026"
+      ],
+      "cited": [
+        "api-rate-limits",
+        "paid-plan-api-limits-2026"
+      ],
+      "tool_calls": null,
+      "answer": "Our help articles disagree on the API rate limit for paid plans. One article states it is 1,000 requests per minute, while another article published on 1 September 2026 states that paid plans now get 2,000 requests per minute. We suggest confirming with support before relying on it. Note that limits are applied using a sliding window and are tracked per account rather than per API key, meaning all keys on an account share the same quota. Additionally, bulk export endpoints have a separate, lower limit of 10 requests per minute due to their higher processing cost. If you need a higher limit for a legitimate use case, you can contact support with your expected request volume.",
+      "reasoning": "The agent correctly identified that the articles disagree, provided both figures (1,000 and 2,000 requests per minute) along with the September 1, 2026 announcement date, and suggested confirming with support. It also included additional relevant details from the support docs."
+    },
+    {
+      "id": "control_reset_link",
+      "category": "conflict_control",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "saw_both": true,
+      "retrieved": [
+        "password-reset",
+        "sign-in-and-lockouts",
+        "two-factor-auth",
+        "account-deletion"
+      ],
+      "cited": [
+        "password-reset"
+      ],
+      "tool_calls": null,
+      "answer": "The password reset link is valid for 30 minutes.",
+      "reasoning": "The agent's answer correctly states that the password reset link is valid for 30 minutes, matching both the reference and the support documentation."
+    },
+    {
+      "id": "control_bulk_export_limit",
+      "category": "conflict_control",
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "saw_both": true,
+      "retrieved": [
+        "api-rate-limits"
+      ],
+      "cited": [
+        "api-rate-limits"
+      ],
+      "tool_calls": null,
+      "answer": "Bulk export endpoints have a separate, lower limit of 10 requests per minute due to their higher processing cost.",
+      "reasoning": "The agent correctly stated the bulk export endpoint rate limit of 10 requests per minute, matching the reference."
+    },
+    {
+      "id": "control_monthly_refund",
+      "category": "conflict_control",
+      "correct": false,
+      "votes": [
+        false,
+        false
+      ],
+      "saw_both": true,
+      "retrieved": [
+        "billing-refunds",
+        "billing-faq-2024",
+        "account-deletion",
+        "invoices-and-receipts"
+      ],
+      "cited": [
+        "billing-refunds",
+        "billing-faq-2024"
+      ],
+      "tool_calls": null,
+      "answer": "Our help articles disagree on the refund window for annual plans, but for monthly plans, our help articles state that they are refundable within 7 days of purchase. To request a refund, open a support ticket with your order ID and the reason for the request. Refunds are processed within 5-10 business days back to the original payment method. We suggest confirming with support before relying on any conflicting details.",
+      "reasoning": "The reference explicitly states that the answer must not claim the articles conflict about monthly refunds, and that the older FAQ says nothing about monthly plans. The agent incorrectly claims the help articles disagree on monthly refunds (or conflates the annual plan conflict with the monthly plan)."
+    }
+  ]
+}

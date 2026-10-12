@@ -290,6 +290,18 @@ DIRECT_ANSWER_SYSTEM_PROMPT = DIRECT_ANSWER_SYSTEM_PROMPT_V3
 GROUNDED_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT_V7
 
 
+# A candidate, not in use: v7 plus agent_v1's rule for articles that
+# disagree, to tell whether the router's 0/4 on the conflict cases
+# (scripts/eval_conflicts.py) comes from its prompt or from having no tool loop.
+GROUNDED_ANSWER_PROMPT_VERSION_V8 = "grounded_answer_v8"
+GROUNDED_ANSWER_SYSTEM_PROMPT_V8 = GROUNDED_ANSWER_SYSTEM_PROMPT_V7 + (
+    "\n\nIf two docs in the context disagree about something your answer "
+    "depends on, don't silently pick one: say our help articles disagree, give "
+    "what each says (and its date, if it has one), and suggest confirming with "
+    "support before relying on it."
+)
+
+
 # The tool loop (AGENT_MODE=loop). One model works through the question with
 # tools instead of a router deciding once whether to search: it can search
 # again with a different query when the first results don't cover the whole

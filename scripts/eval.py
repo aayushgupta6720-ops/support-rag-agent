@@ -151,6 +151,7 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
         "spurious_citations": report.spurious_citations(),
         "cost_usd": report.cost_usd,
         "model_requests": report.model_requests,
+        "agent_requests": report.agent_requests,
         "by_split": {
             split: {"passed": passed, "total": total}
             for split, (passed, total) in sorted(report.pass_rate_by_split().items())
@@ -173,6 +174,8 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
                 "context_precision": r.context_precision,
                 "search_query": r.search_query,
                 "retrieved": r.retrieved,
+                "agent_requests": r.agent_requests,
+                "tool_calls": r.tool_calls,
                 "cited_sources": r.cited_sources,
                 "citation_precision": r.citation_precision,
                 "citation_recall": r.citation_recall,
@@ -230,6 +233,8 @@ async def main() -> None:
     path = save_report(report, run_metadata([case.id for case in cases]))
     print(f"\nSaved results to {path}, summary to {save_summary(path)}")
     cost = report.cost_usd
+    if report.results:
+        print(f"The agent made {report.agent_requests} model calls, {report.agent_requests / len(report.results):.2f} a question.")
     print(f"{report.model_requests} chat-model requests; on a paid key ${cost['total']:.4f} "
           f"(agent ${cost['agent']:.4f}, judge ${cost['judge']:.4f})")
 
