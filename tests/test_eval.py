@@ -96,6 +96,11 @@ _UNANSWERABLE_PATTERNS = {
     "h3_unanswerable_webhooks": r"webhook|callback url",
     "h3_unanswerable_data_region": r"data (is )?stored|data residency|\bregion\b|\beu\b|united states",
     "h4_unanswerable_api_versions": r"api version|\bversion(ed|ing)?\b|deprecat",
+    "x_unanswerable_passkeys": r"passkey|hardware|security key|webauthn|fido|yubikey",
+    "x_unanswerable_phone_hours": r"phone (number|support)|\bcall us\b|\+\d|24/7|support hours|business hours",
+    "x_unanswerable_apple_pay_india": r"apple pay|bank transfer|\bupi\b|\bindia|payment methods? (we )?accept",
+    "x_unanswerable_data_centers": r"data cent(er|re)|data (is )?stored|hosted (in|on)|\bregion\b|\baws\b|\bgcp\b|azure",
+    "x_unanswerable_soc2": r"soc ?2|iso ?27001|certif|complian",
 }
 
 

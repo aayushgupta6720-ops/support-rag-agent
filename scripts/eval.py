@@ -3,7 +3,7 @@
 Usage:
     python -m scripts.eval                      # every case
     python -m scripts.eval multi_turn greeting_1  # only these categories / case ids
-    python -m scripts.eval held_out             # only one split ("dev" or "held_out")
+    python -m scripts.eval held_out             # only one split ("dev", "held_out" or "external")
     python -m scripts.eval --any-settings ...   # run even if retrieval settings differ from render.yaml's
 
 A run uses the deployed retrieval settings (render.yaml's RETRIEVAL_* values),

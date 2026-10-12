@@ -169,7 +169,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("file", nargs="?", type=Path, help="saved scores (default: the latest retrieval_*.json)")
     parser.add_argument("--collect", action="store_true", help="route and search each case, and save the scores")
-    parser.add_argument("--split", choices=["dev", "held_out"], help="with --collect, only this split's cases")
+    parser.add_argument("--split", choices=["dev", "held_out", "external"], help="with --collect, only this split's cases")
     parser.add_argument("--keep-top", action="store_true", help="never drop a case's top chunk")
     parser.add_argument("--changed", action="store_true", help="print the case ids --min-score/--gap change")
     parser.add_argument("--min-score", type=float, default=0.0, help="the floor to test with --changed")

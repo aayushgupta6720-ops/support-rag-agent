@@ -16,7 +16,7 @@ CATEGORIES = {
     "direct",  # greetings and small talk: no retrieval needed
     "multi_turn",  # a follow-up that only makes sense with the earlier turns
 }
-SPLITS = {"dev", "held_out"}
+SPLITS = {"dev", "held_out", "external"}
 
 
 @dataclass
@@ -31,7 +31,9 @@ class EvalCase:
     history: list[dict] = field(default_factory=list)
     # "dev": cases prompts and settings were tuned against. "held_out": cases
     # written before a change and kept out of its tuning, to check it
-    # generalizes rather than fitting the dev cases.
+    # generalizes rather than fitting the dev cases. "external": written by
+    # someone outside the project from the help articles alone, without
+    # seeing the prompts or the other cases (ids x_*).
     split: str = "dev"
 
 
