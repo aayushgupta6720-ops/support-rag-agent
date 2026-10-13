@@ -49,3 +49,11 @@ def test_pricing_for_known_and_unknown_models():
     # unknown models report zero instead of crashing the request
     assert generation_cost_usd("some-new-model", 100, 100) == 0.0
     assert embedding_cost_usd("some-new-model", 100) == 0.0
+
+
+def test_percentiles_match_numpys_linear_ones():
+    from app.core.observability import percentiles
+
+    assert percentiles([]) == {"n": 0}
+    assert percentiles([5, None]) == {"n": 1, "p50": 5.0, "p95": 5.0, "max": 5.0}
+    assert percentiles(range(1, 101)) == {"n": 100, "p50": 50.5, "p95": 95.0, "max": 100.0}  # 95.05, to 0.1

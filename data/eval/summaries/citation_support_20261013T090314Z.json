@@ -1,0 +1,43 @@
+{
+  "results": "eval_20261013T090314Z.json",
+  "run": {
+    "git_commit": "c17280a-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "router",
+    "router_prompt": "router_v4",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 45,
+    "settings_match_render": true
+  },
+  "prompt": "citation_support_v2",
+  "judge": "gemma-4-26b-a4b-it",
+  "citing_answers": 39,
+  "unparsed": [],
+  "supported": 38,
+  "support_rate": 0.9743589743589743,
+  "unsupported": [
+    {
+      "id": "x_unanswerable_passkeys",
+      "category": "unanswerable",
+      "split": "external",
+      "cited": [
+        "two-factor-auth"
+      ],
+      "judge_correct": false,
+      "supported": false,
+      "unsupported_claims": [
+        "passkeys and hardware security keys are not supported",
+        "other methods are not supported"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import contextvars
 import json
 import logging
+import statistics
 import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
@@ -90,3 +91,13 @@ def time_step(name: str, **meta):
 
 def log_event(**fields) -> None:
     logger.info(json.dumps(fields, default=str))
+
+
+def percentiles(values) -> dict:
+    """n, p50, p95 and max of some latencies (None skipped), as numpy's default
+    (linear) percentiles give them; {"n": 0} if there are none."""
+    values = sorted(float(v) for v in values if v is not None)
+    if not values:
+        return {"n": 0}
+    cuts = statistics.quantiles(values, n=100, method="inclusive") if len(values) > 1 else [values[0]] * 99
+    return {"n": len(values), "p50": round(cuts[49], 1), "p95": round(cuts[94], 1), "max": round(values[-1], 1)}

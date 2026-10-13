@@ -1,10 +1,11 @@
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from app.agent.graph import run_agent
 from app.agent.history import Turn
 from app.eval.dataset import EvalCase
-from app.core.observability import start_trace
+from app.core.observability import percentiles, start_trace
 from app.eval.judge import judge_answer
 
 
@@ -75,6 +76,10 @@ class EvalCaseResult:
     # tools it called, in order: what a question costs the live daily budget.
     agent_requests: int = 0
     tool_calls: list[str] = field(default_factory=list)
+    # How long the agent took to answer (the judge's time left out), and each
+    # traced step's share: the latency a visitor would have waited.
+    agent_latency_ms: float = 0.0
+    agent_steps_ms: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -132,6 +137,11 @@ class EvalReport:
         return self._mean("citation_recall")
 
     @property
+    def agent_latency_ms(self) -> dict:
+        """Percentiles of the agent's time to answer, over every case."""
+        return percentiles(r.agent_latency_ms for r in self.results if r.agent_latency_ms)
+
+    @property
     def cost_usd(self) -> dict[str, float]:
         """What the run would have cost on a paid key: the agent's calls and the judge's."""
         agent = sum(r.agent_cost_usd for r in self.results)
@@ -171,7 +181,12 @@ class EvalReport:
 async def run_case(case: EvalCase) -> EvalCaseResult:
     trace = start_trace()
     history = [Turn(**turn) for turn in case.history]
+    started = time.perf_counter()
     result = await run_agent(case.query, history=history)
+    agent_latency_ms = round((time.perf_counter() - started) * 1000, 1)
+    agent_steps_ms: dict[str, float] = {}
+    for step in trace.steps:
+        agent_steps_ms[step.name] = round(agent_steps_ms.get(step.name, 0.0) + step.latency_ms, 1)
     actual_answer = result.get("answer", "")
     # Retrieval is scored on what the search found, one entry per chunk.
     actual_sources = result.get("retrieved_sources", result.get("sources", []))
@@ -210,6 +225,8 @@ async def run_case(case: EvalCase) -> EvalCaseResult:
         model_requests=sum(s.name in MODEL_STEPS for s in trace.steps),
         agent_requests=sum(s.name in MODEL_STEPS - {"judge"} for s in trace.steps),
         tool_calls=list(result.get("tool_calls") or []),
+        agent_latency_ms=agent_latency_ms,
+        agent_steps_ms=agent_steps_ms,
     )
 
 

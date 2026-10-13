@@ -150,6 +150,7 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
         "citation_recall": report.citation_recall,
         "spurious_citations": report.spurious_citations(),
         "cost_usd": report.cost_usd,
+        "agent_latency_ms": report.agent_latency_ms,
         "model_requests": report.model_requests,
         "agent_requests": report.agent_requests,
         "by_split": {
@@ -176,6 +177,9 @@ def save_report(report: EvalReport, metadata: dict) -> Path:
                 "retrieved": r.retrieved,
                 "agent_requests": r.agent_requests,
                 "tool_calls": r.tool_calls,
+                "agent_latency_ms": r.agent_latency_ms,
+                "agent_steps_ms": r.agent_steps_ms,
+                "agent_cost_usd": r.agent_cost_usd,
                 "cited_sources": r.cited_sources,
                 "citation_precision": r.citation_precision,
                 "citation_recall": r.citation_recall,

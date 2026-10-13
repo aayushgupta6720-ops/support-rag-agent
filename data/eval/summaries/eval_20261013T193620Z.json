@@ -1,0 +1,109 @@
+{
+  "run": {
+    "git_commit": "00fccc2-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "loop",
+    "agent_prompt": "agent_v2",
+    "agent_max_steps": 4,
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 131,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 0.9615384615384616,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.965079365079365,
+  "hit_at_1": 0.9333333333333333,
+  "context_precision": 0.5888888888888889,
+  "citation_precision": 0.8966346153846154,
+  "citation_recall": 0.9833333333333333,
+  "spurious_citations": [
+    "unanswerable_phone_support",
+    "unanswerable_team_seats",
+    "x_unanswerable_passkeys",
+    "x_unanswerable_apple_pay_india",
+    "x_unanswerable_data_centers"
+  ],
+  "cost_usd": {
+    "agent": 0.178163,
+    "judge": 0.058575,
+    "total": 0.236738
+  },
+  "agent_latency_ms": {
+    "n": 130,
+    "p50": 4902.9,
+    "p95": 32483.6,
+    "max": 39491.0
+  },
+  "model_requests": 429,
+  "agent_requests": 293,
+  "by_split": {
+    "dev": {
+      "passed": 82,
+      "total": 85
+    },
+    "external": {
+      "passed": 43,
+      "total": 45
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 9,
+      "total": 9
+    },
+    "direct": {
+      "passed": 4,
+      "total": 6
+    },
+    "false_premise": {
+      "passed": 12,
+      "total": 12
+    },
+    "grounded": {
+      "passed": 41,
+      "total": 41
+    },
+    "multi_doc": {
+      "passed": 13,
+      "total": 13
+    },
+    "multi_turn": {
+      "passed": 12,
+      "total": 12
+    },
+    "out_of_scope": {
+      "passed": 5,
+      "total": 5
+    },
+    "reasoning": {
+      "passed": 16,
+      "total": 16
+    },
+    "robustness": {
+      "passed": 4,
+      "total": 4
+    },
+    "unanswerable": {
+      "passed": 9,
+      "total": 12
+    }
+  },
+  "failed": [
+    "unanswerable_sso",
+    "direct_capabilities",
+    "direct_what_questions",
+    "x_unanswerable_passkeys",
+    "x_unanswerable_data_centers"
+  ],
+  "errored": [
+    "out_of_scope_weather"
+  ]
+}
