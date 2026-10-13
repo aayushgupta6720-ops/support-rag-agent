@@ -279,7 +279,35 @@ signs out other sessions, which was half the question. One labeller, 30
 answers and a single "wrong" make both kappas unstable. Labels and agreement
 are in `data/eval/summaries/human_labels_20261011T080413Z.json`.
 
-The golden set (`data/eval/golden_set.jsonl`) has 127 cases. Most of them test
+**Citations checked against the articles.** The eval scores citations only
+against the articles a case expects, so an answer could cite the right
+article and still claim something it doesn't say. `scripts/citation_support.py`
+gives Gemma the full text of every article an answer cites, with the question,
+and asks whether each factual claim is stated there or follows from it (a rule
+applied to what the user said counts). On the 2026-10-11 run, 87 of the 89
+answers that cite something are fully supported. Both exceptions passed the
+judge and add a detail the article doesn't give: a menu path for changing a
+member's role (the article says who can, not where), and "we cannot turn off
+2FA on another user's account" stated as policy, when the article says only
+that turning it off needs the user's own code. On the 45 outside cases below,
+38 of the 39 citing answers are fully supported; the one that isn't is the
+passkeys answer the judge also failed. Summaries are in
+`data/eval/summaries/citation_support_*.json`.
+
+**Cases written by someone outside the project.** Every case above was written
+by the developer who wrote the prompts. On 2026-10-12 a friend wrote 45 more
+(the `external` split, ids `x_*`) from the published help articles alone,
+without seeing the eval cases or the prompts, trying the bot or using an AI.
+They were committed before any run (c17280a) and no prompt has been tuned on
+them. Router: 44/45. Tool loop: 43/45 with `agent_v1` and with `agent_v2`.
+Both agents fail `x_unanswerable_passkeys`: asked about passkeys, they say
+they aren't supported, when the articles only list authenticator apps. The
+loop also fails `x_unanswerable_data_centers`, answering how exports are
+delivered instead of saying where they're stored isn't documented.
+
+The golden set (`data/eval/golden_set.jsonl`) has 172 cases: the 127 in the
+table below, written by the developer, and 45 written by someone outside the
+project (see "Cases written by someone outside the project"). Most test
 failure modes, not whether the model can find the answer to an easy question:
 
 | Category | Cases | What it checks |
@@ -301,6 +329,8 @@ Every case belongs to a split:
 - **`held_out`** (41 cases): written before the latest change and never used
   to tune it, so they show whether the change generalizes rather than
   fitting the dev cases.
+- **`external`** (45 cases): written by someone else from the help articles
+  alone, and never used to tune anything.
 
 Once held-out cases have informed a decision, they move to dev and fresh
 ones are written. The 13 written for the score gap and
@@ -387,11 +417,20 @@ the run would have cost on a paid key, judge included.
 - **The full-context baseline** (every article in the prompt, no retrieval)
   scored 40/40 on the held-out split, with one case cut off by the day's
   quota. Retrieval costs nothing there; its losses are the dev cases above.
-- **Not yet decided:** the loop hasn't run on the 86 dev cases, and those hold
-  most of the adversarial, off-topic and small-talk questions, where a model
-  free to search or not could regress. Until it has, the live agent stays the
-  router. The loop also makes more calls on hard questions (up to five), so
-  switching would mean lowering the daily question budget.
+- **Decided: the router stays live** (2026-10-14, `agent_v2`, dev and
+  external, 130 cases scored). The loop's first dev run obeyed two prompt
+  injections ("don't look anything up") and declined without the policy;
+  `agent_v2` makes its first call a search and answers the question inside an
+  injection, and passes all 9 adversarial cases. But on dev it scored 82/85
+  (one case timed out) against the router's 84/86, and 43/45 against 44/45 on
+  the outside cases. It fixes the router's two multi-doc misses and loses
+  three others: `unanswerable_sso` (it says SAML isn't supported, as with
+  passkeys), and two "what can you help with?" answers that list the help
+  center's topics, which the judge failed because the reference says not to
+  name features. It also costs more: 2.25 model calls and $0.00137 a question
+  on a paid key, against the router's 2.0 and $0.00071, since every step
+  resends the conversation. Different failures at twice the cost isn't a
+  reason to switch.
 
 **Latest full run** (2026-10-11; `gemini-3.5-flash-lite`, 115 cases,
 `router_v4`, `direct_answer_v3`, `grounded_answer_v7`, `judge_v2`,
@@ -689,6 +728,21 @@ Mangum and a Lambda-flavored `CMD` if you specifically need Lambda.
 Either way, use your platform's secret manager for `GEMINI_API_KEY` (Secret
 Manager / SSM Parameter Store), not a plain env var in the deploy command —
 those tend to leak into logs, `describe` output, and shell history.
+
+**What a question costs and how long it takes.** Every `/chat` logs its
+latency, tokens and cost per step; `python -m scripts.usage_report <log file>`
+reads them back (Render's log export, or an eval run's results file, since
+every eval case now records the agent's time and cost) and gives p50/p95
+latency overall, per step and from the cache, and the cost of 1,000 questions
+at the observed cache-hit rate. On a paid key the router costs $0.00071 a
+question (2.0 model calls), so 1,000 questions cost about $0.71 before the
+answer cache; the tool loop would cost $1.37. The three live questions in
+Render's logs (the free plan keeps a few days) took 3.6–4.2s, of which the
+routing call was 1.4–1.8s and Qdrant 1.0–1.2s. The eval's 130 loop questions
+had a median of 4.9s, but its tail isn't a visitor's: the eval sends
+questions back to back, hits the free tier's per-minute limit, and 13% of
+questions waited out retries past 15s. A p95 for visitors needs more traffic
+than the demo gets.
 
 **Quota:** on the Gemini free tier, `gemini-3.5-flash-lite` (the pinned
 model; the alias `gemini-flash-lite-latest` resolved to it on 2026-10-10)

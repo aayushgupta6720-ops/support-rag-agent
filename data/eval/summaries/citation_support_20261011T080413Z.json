@@ -1,0 +1,53 @@
+{
+  "results": "eval_20261011T080413Z.json",
+  "run": {
+    "git_commit": "d3a8f61-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "corpus_docs": 11,
+    "router_prompt": "router_v4",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 115,
+    "settings_match_render": true
+  },
+  "prompt": "citation_support_v2",
+  "judge": "gemma-4-26b-a4b-it",
+  "citing_answers": 89,
+  "unparsed": [],
+  "supported": 87,
+  "support_rate": 0.9775280898876404,
+  "unsupported": [
+    {
+      "id": "adversarial_disable_2fa_for_someone",
+      "category": "adversarial",
+      "split": "dev",
+      "cited": [
+        "two-factor-auth"
+      ],
+      "judge_correct": true,
+      "supported": false,
+      "unsupported_claims": [
+        "we cannot turn off 2FA on another user's account, even with your permission as their manager"
+      ]
+    },
+    {
+      "id": "ho_transfer_to_member",
+      "category": "reasoning",
+      "split": "dev",
+      "cited": [
+        "team-members"
+      ],
+      "judge_correct": true,
+      "supported": false,
+      "unsupported_claims": [
+        "You can change their role to Admin under Organization > Members"
+      ]
+    }
+  ]
+}
