@@ -68,7 +68,7 @@ async def test_it_searches_answers_and_cites_only_what_it_saw(model, searched):
     assert result["answer"] == "Annual plans are refundable within 14 days."
     assert result["sources"] == ["billing-refunds"]  # an id it never saw is dropped
     assert result["retrieved_sources"] == ["billing-refunds"] and result["search_query"] == "annual plan refund window"
-    assert "chunks" in result and result["router_prompt_version"] == result["answer_prompt_version"] == "agent_v1"
+    assert "chunks" in result and result["router_prompt_version"] == result["answer_prompt_version"] == "agent_v2"
     assert result["tool_calls"] == ["search_support_docs", "give_answer"] and result["steps"] == 2
     # The second call carries the search results back to the model.
     answered = seen[1]["contents"][-1].parts[0].function_response
@@ -76,13 +76,14 @@ async def test_it_searches_answers_and_cites_only_what_it_saw(model, searched):
     assert answered.response["results"][0]["article_id"] == "billing-refunds"
 
 
-async def test_small_talk_is_answered_without_searching(model, searched):
+async def test_the_first_call_must_be_a_search_even_for_small_talk(model, searched):
     script, seen = model
-    script.append(call("give_answer", answer="Hi! How can I help?", sources=[]))
+    script += [call("search_support_docs", query="hello"), call("give_answer", answer="Hi! How can I help?", sources=[])]
     result = await run_agent("hello")
-    assert searched == [] and len(seen) == 1
+    # Told "don't look anything up", the model would otherwise answer at once, from memory.
+    assert seen[0]["tool_config"].function_calling_config.allowed_function_names == ["search_support_docs"]
+    assert searched == ["hello"] and len(seen) == 2
     assert result["answer"] == "Hi! How can I help?" and result["sources"] == []
-    assert "chunks" not in result  # /chat logs used_tool: false
 
 
 async def test_it_can_search_twice_and_read_a_whole_article(model, searched):
@@ -107,9 +108,10 @@ async def test_it_can_search_twice_and_read_a_whole_article(model, searched):
 
 async def test_an_unknown_article_is_an_error_the_model_sees(model, searched):
     script, seen = model
-    script += [call("read_article", article_id="nope"), call("give_answer", answer="I don't have enough information.", sources=[])]
+    script += [call("search_support_docs", query="nope"), call("read_article", article_id="nope"),
+               call("give_answer", answer="I don't have enough information.", sources=[])]
     result = await run_agent("Tell me about nope")
-    assert seen[1]["contents"][-1].parts[0].function_response.response == {"error": "No article has the id 'nope'."}
+    assert seen[2]["contents"][-1].parts[0].function_response.response == {"error": "No article has the id 'nope'."}
     assert result["sources"] == []
 
 
@@ -119,9 +121,10 @@ async def test_after_the_step_limit_it_may_only_answer(model, searched, monkeypa
     script += [call("search_support_docs", query="a"), call("search_support_docs", query="b"),
                call("give_answer", answer="Here's what I found.", sources=[])]
     await run_agent("something hard")
-    # Every turn must call a tool; the last may only call give_answer.
+    # Every turn must call a tool: the first a search, the last give_answer.
     assert [s["tool_config"].function_calling_config.mode for s in seen] == ["ANY", "ANY", "ANY"]
-    assert [s["tool_config"].function_calling_config.allowed_function_names for s in seen] == [None, None, ["give_answer"]]
+    assert [s["tool_config"].function_calling_config.allowed_function_names for s in seen] == [
+        ["search_support_docs"], None, ["give_answer"]]
 
 
 async def test_the_models_own_turns_go_back_to_it_with_their_thought_signatures(model, searched):

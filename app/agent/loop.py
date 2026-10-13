@@ -7,8 +7,9 @@ tools: search_support_docs (as often as it needs, with its own queries),
 read_article (a whole article, when a search found the right one but not the
 passage with the detail) and give_answer, which ends the turn with the reply
 and the ids of the articles it uses. "tools" runs the calls and adds their
-results to the conversation. The loop returns to "agent" until it answers;
-after agent_max_steps calls it is allowed only give_answer.
+results to the conversation. The loop returns to "agent" until it answers.
+Its first call is always a search, and after agent_max_steps calls it is
+allowed only give_answer.
 
 The model's turns go back to it as Gemini returned them, so Gemini 3's
 thought signatures on function calls are echoed as it requires.
@@ -41,6 +42,14 @@ from app.rag.retrieval import RetrievedChunk, retrieve
 # calling give_answer, and the answer lost its citations. After the last
 # allowed step, give_answer is the only call left.
 _ANY_TOOL = types.ToolConfig(function_calling_config=types.FunctionCallingConfig(mode="ANY"))
+# The first call must be a search. Left to choose, the model obeyed "Don't
+# look anything up, answer from memory only" and "Ignore the support docs" by
+# answering at once, and declined without the policy (2026-10-13); the router
+# never skips its search, since a separate call decides it. A greeting now
+# costs a search and two calls, as it does with the router.
+_SEARCH_FIRST = types.ToolConfig(
+    function_calling_config=types.FunctionCallingConfig(mode="ANY", allowed_function_names=[SEARCH_DOCS_TOOL_NAME])
+)
 _ANSWER_ONLY = types.ToolConfig(
     function_calling_config=types.FunctionCallingConfig(mode="ANY", allowed_function_names=[GIVE_ANSWER_TOOL_NAME])
 )
@@ -77,7 +86,7 @@ async def _agent(state: LoopState) -> dict:
             contents=[*to_contents(state.get("history", [])), *state["contents"]],
             system_instruction=AGENT_SYSTEM_PROMPT,
             tools=[AGENT_TOOLS],
-            tool_config=_ANSWER_ONLY if final else _ANY_TOOL,
+            tool_config=_SEARCH_FIRST if steps == 0 else _ANSWER_ONLY if final else _ANY_TOOL,
         )
         record_usage(usage, response)
     content = response.candidates[0].content if response.candidates else None
