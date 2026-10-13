@@ -1,0 +1,104 @@
+{
+  "run": {
+    "git_commit": "2adc8ce-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "router",
+    "router_prompt": "router_v5",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 94,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 0.9893617021276596,
+  "retrieval_hit_rate": 0.9876543209876543,
+  "retrieval_recall": 0.9691358024691358,
+  "mrr": 0.9547325102880658,
+  "hit_at_1": 0.9259259259259259,
+  "context_precision": 0.5504115226337449,
+  "citation_precision": 0.9683544303797469,
+  "citation_recall": 0.9351851851851852,
+  "spurious_citations": [
+    "x_unanswerable_passkeys"
+  ],
+  "cost_usd": {
+    "agent": 0.066927,
+    "judge": 0.034633,
+    "total": 0.10156
+  },
+  "agent_latency_ms": {
+    "n": 94,
+    "p50": 2795.8,
+    "p95": 42639.4,
+    "max": 44526.7
+  },
+  "model_requests": 283,
+  "agent_requests": 188,
+  "by_split": {
+    "dev": {
+      "passed": 8,
+      "total": 8
+    },
+    "external": {
+      "passed": 45,
+      "total": 45
+    },
+    "held_out": {
+      "passed": 40,
+      "total": 41
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 3,
+      "total": 3
+    },
+    "direct": {
+      "passed": 1,
+      "total": 1
+    },
+    "false_premise": {
+      "passed": 8,
+      "total": 8
+    },
+    "grounded": {
+      "passed": 18,
+      "total": 18
+    },
+    "multi_doc": {
+      "passed": 12,
+      "total": 13
+    },
+    "multi_turn": {
+      "passed": 15,
+      "total": 15
+    },
+    "out_of_scope": {
+      "passed": 2,
+      "total": 2
+    },
+    "reasoning": {
+      "passed": 24,
+      "total": 24
+    },
+    "robustness": {
+      "passed": 1,
+      "total": 1
+    },
+    "unanswerable": {
+      "passed": 9,
+      "total": 9
+    }
+  },
+  "failed": [
+    "h4_downgrade_then_export"
+  ],
+  "errored": []
+}

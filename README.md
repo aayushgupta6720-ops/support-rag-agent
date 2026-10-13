@@ -211,7 +211,11 @@ Three more scripts check what that run can't:
   `/chat` endpoint in process: the earlier messages go through one session
   and the agent writes its own earlier answers. It checks that the session
   hands back every earlier turn and that a repeated first question comes
-  from the answer cache.
+  from the answer cache. With `router_v5` (2026-10-14): 15/15 conversations
+  (the 11 developer-written and the 4 outside ones), every session handed
+  back its full history, and three repeated questions came from the cache
+  unchanged in under a millisecond. A first run had the same result except
+  one conversation that got no response from Gemini within 60s.
 
 It reports a judge pass rate, a pass rate per category, and these retrieval
 metrics, computed over the cases that expect particular docs:
@@ -460,6 +464,16 @@ What changed, and what the held-out cases said about it:
 - **`router_v4`: search queries keep to the user's own topics.** v3 had
   searched "refund policy billing invoices" for "What is the refund
   policy?".
+- **`router_v5` (current): no eval case in the prompt.** v3 and v4 taught
+  the standalone search query with an example that is one of the eval's own
+  cases (`multi_turn_refund_annual`), so that case partly tested whether the
+  model copies its prompt. v5 describes the rewrite with a placeholder and
+  changes nothing else. On 2026-10-14 (gap 0.10) it scored 93/94 on every
+  multi-turn, held-out and outside case: 15/15 multi-turn, 45/45 outside
+  (v4: 44/45) and 40/41 held-out. The miss, `h4_downgrade_then_export`,
+  isn't the prompt: run three more times each, v4 and v5 both passed it
+  once, because the failed-payment passage only sometimes makes the top 4,
+  the router's known multi-doc weakness.
 - **`grounded_answer_v6`: apply the rule; don't hedge or say "context".**
   On a held-out case, v5 gave the rule (a password reset signs out all
   other sessions) and then said "the context does not state whether" it

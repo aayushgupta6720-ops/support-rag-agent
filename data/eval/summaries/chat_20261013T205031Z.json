@@ -1,0 +1,250 @@
+{
+  "run": {
+    "git_commit": "2adc8ce-dirty",
+    "via": "/chat, in process",
+    "conversations": 15
+  },
+  "judge_pass_rate": 1.0,
+  "history_ok": true,
+  "cache_ok": true,
+  "failed": [],
+  "errored": [
+    "h3_multi_turn_backup_count"
+  ],
+  "conversations": [
+    {
+      "id": "multi_turn_refund_annual",
+      "split": "dev",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "billing-refunds"
+      ],
+      "reasoning": "The agent correctly stated that annual plans are fully refundable within 14 days of purchase and included the necessary steps to request a refund, consistent with the reference and support docs."
+    },
+    {
+      "id": "multi_turn_2fa_lost_phone",
+      "split": "dev",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "two-factor-auth"
+      ],
+      "reasoning": "The agent accurately addresses what to do if the user loses their phone (use a backup code, or contact support for manual identity verification if both the app and backup codes are lost), matching all key facts from the reference and support docs."
+    },
+    {
+      "id": "multi_turn_rate_limit_second_key",
+      "split": "dev",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "api-rate-limits",
+        "api-keys"
+      ],
+      "reasoning": "The agent correctly answered that creating a second key does not double the rate limit, explaining that quotas are shared per account rather than per key, and even included the helpful note about contacting support for higher limits as supported by the retrieved documentation and the reference."
+    },
+    {
+      "id": "multi_turn_deletion_undo",
+      "split": "dev",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "account-deletion"
+      ],
+      "reasoning": "The agent correctly answers that the user can undo the account deletion by logging back in during the 30-day grace period, which matches the reference facts."
+    },
+    {
+      "id": "multi_turn_reset_link_expiry",
+      "split": "dev",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "password-reset"
+      ],
+      "reasoning": "The agent correctly and concisely answered that the password reset link is valid for 30 minutes, which matches the reference fact."
+    },
+    {
+      "id": "multi_turn_topic_switch_2fa_disable",
+      "split": "dev",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "two-factor-auth"
+      ],
+      "reasoning": "The agent accurately explains how to disable 2FA using the information from the support docs, matching the reference facts correctly."
+    },
+    {
+      "id": "multi_turn_false_premise_after_pushback",
+      "split": "dev",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "billing-refunds"
+      ],
+      "reasoning": "The agent correctly stated that annual plans are refundable within 14 days of purchase, matching the reference and support docs, and correctly denied the user's attempt to make it agree with an incorrect policy."
+    },
+    {
+      "id": "multi_turn_thanks",
+      "split": "dev",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [],
+      "reasoning": "The agent provided a friendly and helpful acknowledgment to the user's expression of gratitude, matching the requirement without inventing product facts or stating it lacks information."
+    },
+    {
+      "id": "h3_multi_turn_backup_count",
+      "split": "held_out",
+      "error": "no response from Gemini within 60s"
+    },
+    {
+      "id": "h3_multi_turn_bulk_after_tier",
+      "split": "held_out",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "api-rate-limits"
+      ],
+      "reasoning": "The agent correctly answered the user's question about the bulk export rate limit, matching the reference facts, and provided additional relevant context from the support docs."
+    },
+    {
+      "id": "h4_multi_turn_more_codes",
+      "split": "held_out",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "two-factor-auth"
+      ],
+      "reasoning": "The agent's answer accurately states that the user can regenerate a fresh set of backup codes from the Security page, which matches both the reference and the retrieved support documentation."
+    },
+    {
+      "id": "x_followup_reset_link_expired",
+      "split": "external",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "password-reset"
+      ],
+      "reasoning": "The agent correctly informed the customer that they need a new link because the previous one expired after 30 minutes, and instructed them to request a new one from the login page, matching the reference."
+    },
+    {
+      "id": "x_followup_revoke_before_deploy",
+      "split": "external",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "api-keys"
+      ],
+      "reasoning": "The agent correctly answered 'No', advised against revoking the old key before deployment, and explained that revocation takes effect immediately with HTTP 401 errors, matching the reference."
+    },
+    {
+      "id": "x_followup_sender_addresses",
+      "split": "external",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "email-notifications"
+      ],
+      "reasoning": "The agent correctly identified that notifications are sent from notifications@example.com and security emails from no-reply@example.com, matching the reference and support docs without reversing them or implying they can be disabled."
+    },
+    {
+      "id": "x_followup_more_backup_codes",
+      "split": "external",
+      "turns": 2,
+      "history_turns": 2,
+      "history_ok": true,
+      "correct": true,
+      "votes": [
+        true
+      ],
+      "sources": [
+        "two-factor-auth"
+      ],
+      "reasoning": "The agent correctly answered that the user can regenerate a fresh set of backup codes at any time from the Security page, which matches the reference and is supported by the retrieved documentation."
+    }
+  ],
+  "cache": [
+    {
+      "id": "password_reset_1",
+      "same_answer": true,
+      "first_ms": 0.09,
+      "again_ms": 0.05
+    },
+    {
+      "id": "billing_refund_1",
+      "same_answer": true,
+      "first_ms": 8176.01,
+      "again_ms": 0.06
+    },
+    {
+      "id": "rate_limit_1",
+      "same_answer": true,
+      "first_ms": 4120.28,
+      "again_ms": 0.08
+    }
+  ]
+}
