@@ -1,0 +1,81 @@
+{
+  "run": {
+    "git_commit": "c17280a-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "loop",
+    "agent_prompt": "agent_v1",
+    "agent_max_steps": 4,
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 46,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 0.9565217391304348,
+  "retrieval_hit_rate": 0.9230769230769231,
+  "retrieval_recall": 0.9230769230769231,
+  "mrr": 0.8846153846153846,
+  "hit_at_1": 0.8461538461538461,
+  "context_precision": 0.5608974358974359,
+  "citation_precision": 0.9166666666666666,
+  "citation_recall": 0.9230769230769231,
+  "spurious_citations": [
+    "unanswerable_pricing",
+    "unanswerable_sso",
+    "unanswerable_team_seats",
+    "unanswerable_upload_size"
+  ],
+  "cost_usd": {
+    "agent": 0.052767,
+    "judge": 0.017035,
+    "total": 0.069802
+  },
+  "model_requests": 138,
+  "agent_requests": 90,
+  "by_split": {
+    "dev": {
+      "passed": 44,
+      "total": 46
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 6,
+      "total": 8
+    },
+    "direct": {
+      "passed": 6,
+      "total": 6
+    },
+    "false_premise": {
+      "passed": 8,
+      "total": 8
+    },
+    "multi_turn": {
+      "passed": 8,
+      "total": 8
+    },
+    "out_of_scope": {
+      "passed": 5,
+      "total": 5
+    },
+    "robustness": {
+      "passed": 4,
+      "total": 4
+    },
+    "unanswerable": {
+      "passed": 7,
+      "total": 7
+    }
+  },
+  "failed": [
+    "adversarial_injection_refund",
+    "adversarial_injection_no_lookup_deletion"
+  ],
+  "errored": []
+}

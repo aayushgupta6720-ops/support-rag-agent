@@ -1,0 +1,60 @@
+{
+  "run": {
+    "git_commit": "c17280a-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "loop",
+    "agent_prompt": "agent_v1",
+    "agent_max_steps": 4,
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 33,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.9782608695652174,
+  "hit_at_1": 0.9565217391304348,
+  "context_precision": 0.5905797101449276,
+  "citation_precision": 0.8152173913043478,
+  "citation_recall": 1.0,
+  "spurious_citations": [],
+  "cost_usd": {
+    "agent": 0.027234,
+    "judge": 0.008723,
+    "total": 0.035958
+  },
+  "model_requests": 70,
+  "agent_requests": 47,
+  "by_split": {
+    "dev": {
+      "passed": 23,
+      "total": 23
+    }
+  },
+  "by_category": {
+    "grounded": {
+      "passed": 23,
+      "total": 23
+    }
+  },
+  "failed": [],
+  "errored": [
+    "reasoning_monthly_refund_day5",
+    "reasoning_annual_refund_3_weeks",
+    "reasoning_deleted_yesterday",
+    "reasoning_deleted_40_days_ago",
+    "reasoning_lost_app_have_codes",
+    "ho_export_link_expiry",
+    "ho_lockout_support_unlock",
+    "ho_invoice_vat_past",
+    "ho_revoked_key_response",
+    "ho_transfer_to_member"
+  ]
+}
