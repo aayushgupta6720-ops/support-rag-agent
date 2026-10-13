@@ -1,0 +1,105 @@
+{
+  "run": {
+    "git_commit": "fa93079-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "router",
+    "router_prompt": "router_v5",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 86,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 0.9529411764705882,
+  "retrieval_hit_rate": 0.9864864864864865,
+  "retrieval_recall": 0.9662162162162162,
+  "mrr": 0.9504504504504504,
+  "hit_at_1": 0.918918918918919,
+  "context_precision": 0.5540540540540541,
+  "citation_precision": 0.9583333333333334,
+  "citation_recall": 0.9425675675675675,
+  "spurious_citations": [
+    "x_unanswerable_passkeys"
+  ],
+  "cost_usd": {
+    "agent": 0.060789,
+    "judge": 0.032357,
+    "total": 0.093147
+  },
+  "agent_latency_ms": {
+    "n": 85,
+    "p50": 3039.0,
+    "p95": 41340.4,
+    "max": 53425.7
+  },
+  "model_requests": 259,
+  "agent_requests": 170,
+  "by_split": {
+    "external": {
+      "passed": 42,
+      "total": 44
+    },
+    "held_out": {
+      "passed": 39,
+      "total": 41
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 3,
+      "total": 3
+    },
+    "direct": {
+      "passed": 1,
+      "total": 1
+    },
+    "false_premise": {
+      "passed": 7,
+      "total": 8
+    },
+    "grounded": {
+      "passed": 18,
+      "total": 18
+    },
+    "multi_doc": {
+      "passed": 11,
+      "total": 13
+    },
+    "multi_turn": {
+      "passed": 7,
+      "total": 7
+    },
+    "out_of_scope": {
+      "passed": 2,
+      "total": 2
+    },
+    "reasoning": {
+      "passed": 24,
+      "total": 24
+    },
+    "robustness": {
+      "passed": 1,
+      "total": 1
+    },
+    "unanswerable": {
+      "passed": 7,
+      "total": 8
+    }
+  },
+  "failed": [
+    "h4_downgrade_then_export",
+    "h4_sms_2fa_lost_phone",
+    "x_paid_bulk_export_limit",
+    "x_unanswerable_passkeys"
+  ],
+  "errored": [
+    "x_unanswerable_soc2"
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "runs": [
+    "eval_20261013T204315Z.json",
+    "eval_20261013T211911Z.json+eval_20261013T213608Z.json",
+    "eval_20261013T213412Z.json+eval_20261013T213608Z.json"
+  ],
+  "settings": {
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "corpus_docs": 11,
+    "agent_mode": "router",
+    "router_prompt": "router_v5",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false
+  },
+  "cases": 86,
+  "passed_per_run": [
+    85,
+    82,
+    85
+  ],
+  "mean_pass_rate": 0.9767,
+  "by_split": {
+    "external": {
+      "cases": 45,
+      "passed_per_run": [
+        45,
+        43,
+        45
+      ],
+      "mean": 44.33,
+      "min": 43,
+      "max": 45
+    },
+    "held_out": {
+      "cases": 41,
+      "passed_per_run": [
+        40,
+        39,
+        40
+      ],
+      "mean": 39.67,
+      "min": 39,
+      "max": 40
+    }
+  },
+  "failures": [
+    {
+      "id": "h4_downgrade_then_export",
+      "split": "held_out",
+      "failed_runs": 3,
+      "of": 3
+    },
+    {
+      "id": "h4_sms_2fa_lost_phone",
+      "split": "held_out",
+      "failed_runs": 1,
+      "of": 3
+    },
+    {
+      "id": "x_paid_bulk_export_limit",
+      "split": "external",
+      "failed_runs": 1,
+      "of": 3
+    },
+    {
+      "id": "x_unanswerable_passkeys",
+      "split": "external",
+      "failed_runs": 1,
+      "of": 3
+    }
+  ],
+  "missing_from_some_runs": []
+}

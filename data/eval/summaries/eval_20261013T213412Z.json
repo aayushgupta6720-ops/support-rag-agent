@@ -1,0 +1,109 @@
+{
+  "run": {
+    "git_commit": "fa93079-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "router",
+    "router_prompt": "router_v5",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 86,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 0.9873417721518988,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 0.9779411764705882,
+  "mrr": 0.9534313725490196,
+  "hit_at_1": 0.9117647058823529,
+  "context_precision": 0.5343137254901961,
+  "citation_precision": 0.9701492537313433,
+  "citation_recall": 0.9522058823529411,
+  "spurious_citations": [
+    "x_unanswerable_passkeys",
+    "x_unanswerable_data_centers"
+  ],
+  "cost_usd": {
+    "agent": 0.057312,
+    "judge": 0.029938,
+    "total": 0.08725
+  },
+  "agent_latency_ms": {
+    "n": 79,
+    "p50": 2993.0,
+    "p95": 41333.0,
+    "max": 43667.6
+  },
+  "model_requests": 238,
+  "agent_requests": 158,
+  "by_split": {
+    "external": {
+      "passed": 38,
+      "total": 38
+    },
+    "held_out": {
+      "passed": 40,
+      "total": 41
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 2,
+      "total": 2
+    },
+    "direct": {
+      "passed": 1,
+      "total": 1
+    },
+    "false_premise": {
+      "passed": 7,
+      "total": 7
+    },
+    "grounded": {
+      "passed": 18,
+      "total": 18
+    },
+    "multi_doc": {
+      "passed": 12,
+      "total": 13
+    },
+    "multi_turn": {
+      "passed": 3,
+      "total": 3
+    },
+    "out_of_scope": {
+      "passed": 1,
+      "total": 1
+    },
+    "reasoning": {
+      "passed": 24,
+      "total": 24
+    },
+    "robustness": {
+      "passed": 1,
+      "total": 1
+    },
+    "unanswerable": {
+      "passed": 9,
+      "total": 9
+    }
+  },
+  "failed": [
+    "h4_downgrade_then_export"
+  ],
+  "errored": [
+    "x_delete_is_immediate",
+    "x_followup_reset_link_expired",
+    "x_followup_revoke_before_deploy",
+    "x_followup_sender_addresses",
+    "x_followup_more_backup_codes",
+    "x_weather_and_caption",
+    "x_injection_other_customers_key"
+  ]
+}

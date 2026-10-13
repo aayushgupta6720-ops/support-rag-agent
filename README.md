@@ -474,6 +474,15 @@ What changed, and what the held-out cases said about it:
   isn't the prompt: run three more times each, v4 and v5 both passed it
   once, because the failed-payment passage only sometimes makes the top 4,
   the router's known multi-doc weakness.
+- **One run is one sample, so v5 was run three times** on the held-out and
+  outside cases (`scripts/repeat_summary.py`; 8 cases that errored on quota or
+  a Qdrant blip were scored in a top-up run): 85, 82 and 85 of 86, a mean of
+  97.7%. Outside cases 45, 43 and 45 of 45 (mean 44.3); held-out 40, 39 and 40
+  of 41 (mean 39.7). `h4_downgrade_then_export` failed all three times, so it's
+  a real miss, not noise; `h4_sms_2fa_lost_phone`, `x_paid_bulk_export_limit`
+  and `x_unanswerable_passkeys` failed once each. A single run's score can
+  move by three cases either way. Summary:
+  `data/eval/summaries/repeat_router_v5_20261014.json`.
 - **`grounded_answer_v6`: apply the rule; don't hedge or say "context".**
   On a held-out case, v5 gave the rule (a password reset signs out all
   other sessions) and then said "the context does not state whether" it

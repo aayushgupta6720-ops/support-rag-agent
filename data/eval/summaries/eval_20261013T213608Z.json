@@ -1,0 +1,72 @@
+{
+  "run": {
+    "git_commit": "fa93079-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "router",
+    "router_prompt": "router_v5",
+    "direct_answer_prompt": "direct_answer_v3",
+    "grounded_answer_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 8,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 0.8333333333333334,
+  "retrieval_recall": 0.8333333333333334,
+  "mrr": 0.8333333333333334,
+  "hit_at_1": 0.8333333333333334,
+  "context_precision": 0.625,
+  "citation_precision": 0.9,
+  "citation_recall": 0.8333333333333334,
+  "spurious_citations": [],
+  "cost_usd": {
+    "agent": 0.005341,
+    "judge": 0.002509,
+    "total": 0.00785
+  },
+  "agent_latency_ms": {
+    "n": 8,
+    "p50": 2615.8,
+    "p95": 41976.9,
+    "max": 62595.5
+  },
+  "model_requests": 24,
+  "agent_requests": 16,
+  "by_split": {
+    "external": {
+      "passed": 8,
+      "total": 8
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 1,
+      "total": 1
+    },
+    "false_premise": {
+      "passed": 1,
+      "total": 1
+    },
+    "multi_turn": {
+      "passed": 4,
+      "total": 4
+    },
+    "out_of_scope": {
+      "passed": 1,
+      "total": 1
+    },
+    "unanswerable": {
+      "passed": 1,
+      "total": 1
+    }
+  },
+  "failed": [],
+  "errored": []
+}
