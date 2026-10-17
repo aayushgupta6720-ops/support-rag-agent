@@ -65,6 +65,27 @@ requirements-dev.txt   requirements.txt + pytest
 .env.example
 ```
 
+## Why these tools
+
+- **LangGraph** makes the agent an explicit graph that can be tested step by
+  step: `route`, then `retrieve` if the router asked for a search, then
+  `generate`, with one conditional edge (`app/agent/graph.py`). Each node is
+  a plain async function, so the tests run every step with Gemini and Qdrant
+  faked. A typed state (`AgentState`) carries the query, the retrieved
+  chunks, the sources and the prompt versions from step to step, and comes
+  back whole for the `/chat` log line and the eval.
+- **Qdrant** is the same engine in Docker for local development and in Qdrant
+  Cloud for the live demo, with the same client code pointed at a different
+  `QDRANT_URL`. Its async Python client fits the async FastAPI app, and each
+  chunk's payload holds the doc id, title and text that answers and their
+  source chips need.
+- **Gemini** gives both models from one provider and one key:
+  `gemini-3.5-flash-lite` for chat and `gemini-embedding-001` for
+  embeddings. Its native function calling and schema-validated JSON output
+  are what the design relies on: the router decides by calling
+  `search_support_docs`, and the grounded answer comes back as an answer plus
+  a list of source ids that the code checks against what was retrieved.
+
 ## Run locally
 
 ```bash
