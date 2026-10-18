@@ -23,8 +23,9 @@ services:
       - key: QDRANT_API_KEY
         sync: false
       # Internal URL of the support-rag-agent-kv Key Value instance (free
-      # plan, Oregon, internal access only), which holds rate-limit counts and
-      # chat sessions: redis://<instance id>:6379. The instance was created
+      # plan, Oregon, internal access only), which holds rate-limit counts,
+      # chat sessions, cached answers, feedback ratings and the answers they
+      # rate: redis://<instance id>:6379. The instance was created
       # outside this Blueprint, so it's set here by hand, not via fromService.
       - key: REDIS_URL
         sync: false

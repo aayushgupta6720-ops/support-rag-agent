@@ -23,7 +23,7 @@ app/
   api/ratelimit.py     Per-visitor /chat limits, counted in Redis (or in memory)
   api/sessions.py      Multi-turn chat history per session, in Redis (or in memory)
   api/answer_cache.py  Reused answers to repeat first questions, in Redis (or in memory)
-  api/feedback.py      Thumbs up/down on answers, and the token-protected export
+  api/feedback.py      Thumbs up/down ratings, in Redis (or in memory), and the token-protected export
   api/body_limit.py    Refuses oversized request bodies before they're read
   core/config.py       Settings, loaded from .env
   core/gemini_client.py Shared, cached google-genai client
@@ -707,12 +707,20 @@ local `.env`. Note that Render currently asks for a card on file even for
 the free plan (an account-level anti-abuse check, not a charge) —
 happens on both the Blueprint and manual "New Web Service" paths.
 
-Rate-limit counts and chat sessions live in a Render Key Value instance
-(Valkey 8, free plan, same region, internal access only, `allkeys-lru`
-eviction since every key has a TTL anyway). Set `REDIS_URL` to its internal
-URL, `redis://<instance id>:6379`. The free plan keeps data in memory only,
-so a Key Value restart resets the counts, but web-service restarts, which
-happen far more often, no longer do. On startup the app logs
+Rate-limit counts, chat sessions, cached answers, feedback ratings and the
+record of each answer given (by `answer_id`, for a day) live in a Render Key
+Value instance named `support-rag-agent-kv` (Valkey 8, free plan, same
+region, internal access only, `allkeys-lru` eviction since every key has a
+TTL except the ratings list, which is capped at 2,000). It's a separate
+entry on the Render dashboard, listed as "Available" where the web service
+says "Deployed". `render.yaml` doesn't create it: the instance was made by
+hand in the dashboard, so a fresh Blueprint deploy needs one created first
+(New → Key Value, same region). `REDIS_URL` is `sync: false` like the keys
+above; set it to the instance's internal URL, `redis://<instance id>:6379`.
+Without it the app still runs, but keeps everything in its own memory. The
+free plan doesn't save to disk, so a Key Value restart resets the counts,
+but web-service restarts, which happen far more often, no longer do. On
+startup the app logs
 `{"event": "state_store", "backend": "redis"}` (or `"memory"`), which is how
 to check it picked the URL up.
 
