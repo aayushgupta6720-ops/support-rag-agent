@@ -17,18 +17,20 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from redis.asyncio import Redis
-from redis.exceptions import RedisError
+from redis.exceptions import RedisError, ResponseError
 
 from app.api.answer_cache import MemoryAnswerCache, RedisAnswerCache, answer_cache_key
 from app.api.ratelimit import rate_limit
 from app.core.config import Settings, get_settings
 from app.core.observability import log_event
-from app.core.redis_client import RedisOutage
+from app.core.redis_client import KEY_PREFIX, RedisOutage
 from app.models.schemas import FeedbackRequest
 
 MAX_KEPT = 2000  # the newest ratings kept; older ones are dropped
 ISSUED_TTL_S = 24 * 3600  # how long an answer can be rated
 MAX_ISSUED = 5000  # answers remembered in the process (without Redis)
+FEEDBACK_KEY = f"{KEY_PREFIX}feedback"
+LEGACY_FEEDBACK_KEY = "feedback"  # the list's name before keys carried the app's prefix (October 2026)
 
 router = APIRouter()
 
@@ -52,19 +54,35 @@ class RedisFeedbackStore:
         self._fallback = fallback
         self._redis = redis
         self._outage = outage or RedisOutage()
+        self._moved = False
 
     def _failed(self, exc: RedisError) -> None:
         if self._outage.failed():  # once per outage, not once per request
             log_event(event="redis_unavailable", used_by="feedback", error=str(exc))
+
+    async def _move_legacy_list(self) -> None:
+        """Ratings saved before the prefix are real visitors' and have no TTL, so
+        they're renamed rather than left behind. RENAMENX does nothing if the new
+        list already exists; Redis errors when there's no old list to move."""
+        if self._moved:
+            return
+        try:
+            moved = await self._redis.renamenx(LEGACY_FEEDBACK_KEY, FEEDBACK_KEY)
+        except ResponseError:  # no such key: nothing to move
+            moved = False
+        self._moved = True
+        if moved:
+            log_event(event="feedback_moved", source=LEGACY_FEEDBACK_KEY, target=FEEDBACK_KEY)
 
     async def add(self, record: dict) -> None:
         if self._outage.skip():
             await self._fallback.add(record)
             return
         try:
+            await self._move_legacy_list()
             async with self._redis.pipeline(transaction=True) as pipe:
-                pipe.lpush("feedback", json.dumps(record))
-                pipe.ltrim("feedback", 0, MAX_KEPT - 1)
+                pipe.lpush(FEEDBACK_KEY, json.dumps(record))
+                pipe.ltrim(FEEDBACK_KEY, 0, MAX_KEPT - 1)
                 await pipe.execute()
         except RedisError as exc:
             self._failed(exc)
@@ -76,7 +94,8 @@ class RedisFeedbackStore:
         if self._outage.skip():
             return await self._fallback.newest()
         try:
-            raw = await self._redis.lrange("feedback", 0, -1)
+            await self._move_legacy_list()
+            raw = await self._redis.lrange(FEEDBACK_KEY, 0, -1)
         except RedisError as exc:
             self._failed(exc)
             return await self._fallback.newest()
@@ -90,7 +109,7 @@ def build_issued_answers(
 ) -> MemoryAnswerCache | RedisAnswerCache:
     """The answers /chat gave in the last day, by answer_id: what a rating rates."""
     memory = MemoryAnswerCache(ISSUED_TTL_S, max_entries=MAX_ISSUED)
-    return RedisAnswerCache(memory, redis, outage, prefix="issued:") if redis else memory
+    return RedisAnswerCache(memory, redis, outage, prefix=f"{KEY_PREFIX}issued:") if redis else memory
 
 
 def build_feedback_store(

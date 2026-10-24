@@ -1,0 +1,70 @@
+{
+  "run": {
+    "git_commit": "a039550-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "full_context",
+    "full_context_prompt": "full_context_v1",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 25,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.29234848484848486,
+  "hit_at_1": 0.1,
+  "context_precision": 0.09090909090909091,
+  "citation_precision": 0.9375,
+  "citation_recall": 0.8,
+  "spurious_citations": [],
+  "cost_usd": {
+    "agent": 0.025462,
+    "judge": 0.020212,
+    "total": 0.045674
+  },
+  "agent_latency_ms": {
+    "n": 25,
+    "p50": 1473.4,
+    "p95": 31719.8,
+    "max": 69723.1
+  },
+  "model_requests": 50,
+  "agent_requests": 25,
+  "by_split": {
+    "dev": {
+      "passed": 19,
+      "total": 19
+    },
+    "external": {
+      "passed": 2,
+      "total": 2
+    },
+    "held_out": {
+      "passed": 4,
+      "total": 4
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 11,
+      "total": 11
+    },
+    "direct": {
+      "passed": 7,
+      "total": 7
+    },
+    "out_of_scope": {
+      "passed": 7,
+      "total": 7
+    }
+  },
+  "failed": [],
+  "errored": []
+}

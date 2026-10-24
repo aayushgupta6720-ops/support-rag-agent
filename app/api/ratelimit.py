@@ -21,7 +21,7 @@ from redis.exceptions import RedisError
 
 from app.core.config import Settings, get_settings
 from app.core.observability import log_event
-from app.core.redis_client import RedisOutage
+from app.core.redis_client import KEY_PREFIX, RedisOutage
 
 
 @dataclass(frozen=True)
@@ -142,7 +142,7 @@ class RedisRateLimiter:
         for limit in self.limits:
             args += [limit.count, limit.window_s]
         try:
-            refused, wait = await self._script(keys=[f"ratelimit:{self.what}:{key}"], args=args)
+            refused, wait = await self._script(keys=[f"{KEY_PREFIX}ratelimit:{self.what}:{key}"], args=args)
         except RedisError as exc:
             if self._outage.failed():  # once per outage, not once per request
                 log_event(event="redis_unavailable", used_by="rate_limit", error=str(exc))

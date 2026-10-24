@@ -5,24 +5,41 @@ calls and a few seconds.
 Only a conversation's first question is cached, since a follow-up depends on
 its history. The key is a hash of the normalized question plus everything
 that shapes its answer (models, prompt versions, retrieval settings, the
-collection), so changing any of them misses instead of serving an answer made
-the old way. The question itself is never stored. After re-ingesting changed
-docs, cached answers can lag until their TTL runs out."""
+agent mode, the collection, and the help articles the app ships with), so
+changing any of them misses instead of serving an answer made the old way.
+That's why answers can be kept for a week: a deploy with edited articles
+starts from fresh answers. The question itself is never stored."""
 
 import hashlib
 import json
 import re
 import time
 from collections import OrderedDict
+from functools import lru_cache
 from typing import Callable
 
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from app.agent.prompts import DIRECT_ANSWER_PROMPT_VERSION, GROUNDED_ANSWER_PROMPT_VERSION, ROUTER_PROMPT_VERSION
+from app.agent.prompts import (
+    DIRECT_ANSWER_PROMPT_VERSION,
+    FULL_CONTEXT_PROMPT_VERSION,
+    GROUNDED_ANSWER_PROMPT_VERSION,
+    ROUTER_PROMPT_VERSION,
+)
 from app.core.config import Settings, get_settings
 from app.core.observability import log_event
-from app.core.redis_client import RedisOutage
+from app.core.redis_client import KEY_PREFIX, RedisOutage
+from app.rag.documents import load_documents
+
+
+@lru_cache
+def corpus_version() -> str:
+    """A hash of the help articles in data/docs: what the deployed app answers from."""
+    digest = hashlib.sha256()
+    for doc in load_documents():
+        digest.update("\x1f".join((doc.doc_id, doc.title, doc.text, "\x1e")).encode())
+    return digest.hexdigest()[:16]
 
 
 def answer_cache_key(query: str) -> str:
@@ -34,14 +51,28 @@ def answer_cache_key(query: str) -> str:
         ROUTER_PROMPT_VERSION,
         DIRECT_ANSWER_PROMPT_VERSION,
         GROUNDED_ANSWER_PROMPT_VERSION,
+        FULL_CONTEXT_PROMPT_VERSION,
         settings.generation_model,
         settings.embedding_model,
         settings.qdrant_collection,
+        settings.agent_mode,
+        corpus_version(),
         str(settings.retrieval_top_k),
         str(settings.retrieval_min_score),
         str(settings.retrieval_max_score_gap),
     ]
     return hashlib.sha256("\x1f".join(shaping).encode()).hexdigest()
+
+
+def cached_answer(result: dict) -> dict:
+    """What the cache keeps of an agent's answer."""
+    return {
+        "answer": result["answer"],
+        "sources": list(dict.fromkeys(result.get("sources", []))),
+        "used_tool": "chunks" in result,
+        "router_prompt_version": result.get("router_prompt_version"),
+        "answer_prompt_version": result.get("answer_prompt_version"),
+    }
 
 
 class MemoryAnswerCache:
@@ -77,7 +108,7 @@ class RedisAnswerCache:
     in-process `fallback` is used instead."""
 
     def __init__(
-        self, fallback: MemoryAnswerCache, redis: Redis, outage: RedisOutage | None = None, prefix: str = "answer:"
+        self, fallback: MemoryAnswerCache, redis: Redis, outage: RedisOutage | None = None, prefix: str = f"{KEY_PREFIX}answer:"
     ) -> None:
         self._fallback = fallback
         self._redis = redis
@@ -87,6 +118,10 @@ class RedisAnswerCache:
     def _failed(self, exc: RedisError) -> None:
         if self._outage.failed():  # once per outage, not once per request
             log_event(event="redis_unavailable", used_by="answer_cache", error=str(exc))
+
+    def redis_down(self) -> bool:
+        """True while Redis is being skipped after an error."""
+        return self._outage.skip()
 
     async def get(self, key: str) -> dict | None:
         if self._outage.skip():

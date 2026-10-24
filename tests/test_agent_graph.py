@@ -6,6 +6,8 @@ from app.agent.history import Turn
 from app.agent.prompts import (
     DIRECT_ANSWER_PROMPT_VERSION,
     DIRECT_ANSWER_SYSTEM_PROMPT,
+    FULL_CONTEXT_PROMPT_VERSION,
+    FULL_CONTEXT_SYSTEM_PROMPT,
     GROUNDED_ANSWER_PROMPT_VERSION,
     GROUNDED_ANSWER_SYSTEM_PROMPT,
     ROUTER_PROMPT_VERSION,
@@ -220,3 +222,21 @@ async def test_a_direct_answer_cannot_cite_anything(monkeypatch, retrieve_calls)
 
     assert fake.calls[1]["response_schema"] is graph.AgentAnswer
     assert (result["sources"], result["retrieved_sources"]) == ([], [])
+
+
+async def test_full_context_mode_answers_in_one_call_with_every_article(monkeypatch, retrieve_calls):
+    monkeypatch.setattr(get_settings(), "agent_mode", "full_context")
+    fake = FakeGenerate([model_response(parsed=graph.GroundedAnswer(
+        answer="Within 14 days.", sources=["billing-refunds", "not-an-article"]))])
+    monkeypatch.setattr(graph, "generate", fake)
+
+    result = await graph.run_agent("Can I get a refund on my annual plan?")
+
+    articles = graph.all_articles()
+    assert len(fake.calls) == 1 and retrieve_calls.queries == []  # no router call, no search
+    assert fake.calls[0]["system_instruction"] == FULL_CONTEXT_SYSTEM_PROMPT  # grounded rules plus greetings, off-topic
+    assert all(f"[doc: {a.doc_id}]" in fake.calls[0]["prompt"] for a in articles)
+    assert result["answer"] == "Within 14 days."
+    assert result["sources"] == ["billing-refunds"]  # a made-up id is dropped
+    assert result["retrieved_sources"] == [a.doc_id for a in articles]
+    assert result["answer_prompt_version"] == FULL_CONTEXT_PROMPT_VERSION and "router_prompt_version" not in result

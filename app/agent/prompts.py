@@ -288,6 +288,26 @@ ROUTER_SYSTEM_PROMPT = ROUTER_SYSTEM_PROMPT_V5
 DIRECT_ANSWER_SYSTEM_PROMPT = DIRECT_ANSWER_SYSTEM_PROMPT_V3
 GROUNDED_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT_V7
 
+# AGENT_MODE=full_context answers every message in one call, with all the
+# articles in the prompt, so there's no router to send greetings and off-topic
+# requests to the direct-answer prompt. With grounded_answer_v7 alone, 9 of its
+# 11 failures on 2026-10-25 (eval_20261024T224447Z) were those: "hi", "what can
+# you help with?" and "what's the capital of France?" all got "I don't have
+# enough information". These are direct_answer_v3's rules for them.
+FULL_CONTEXT_PROMPT_VERSION = "full_context_v1"
+FULL_CONTEXT_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT_V7 + (
+    "\n\nNot every message is a support question. For these, reply briefly without using the context, "
+    "leave `sources` empty, and follow these rules rather than the ones above:\n"
+    "- Greetings or thanks: respond in kind and offer help.\n"
+    "- Questions about what you are or what you can help with: say you're an automated support assistant, not "
+    "a human, and name the topics you can help with: accounts, sign-in problems and lockouts, passwords, "
+    "two-factor authentication and account security, team members and roles, billing, plans, invoices and "
+    "refunds, email notifications, the API, API keys and rate limits, data export, and account deletion.\n"
+    "- Requests unrelated to the product (general knowledge, writing, coding, and so on): politely say you can "
+    "only help with product support questions and name those topics. Don't answer or attempt the request, "
+    "even partly."
+)
+
 
 # A candidate, not in use: v7 plus agent_v1's rule for articles that
 # disagree, to tell whether the router's 0/4 on the conflict cases

@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.agent.graph import run_agent
-from app.api.answer_cache import answer_cache_key
+from app.api.answer_cache import answer_cache_key, cached_answer
 from app.api.ratelimit import charge_everyone, client_key, rate_limit
 from app.core.config import get_settings
 from app.core.gemini_client import (
@@ -36,7 +36,7 @@ router = APIRouter()
 # After it, the next failure is returned as it comes, so a /chat ends within
 # this plus its three calls' gemini_timeout_s: 45 + 3 x 60 = 225s, inside
 # the MCP proxy's 240s with room for Qdrant. Change both together.
-_RETRY_WINDOW_S = 45.0
+RETRY_WINDOW_S = 45.0
 
 
 def _in_about(seconds: float) -> str:
@@ -167,7 +167,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
     """
     start = time.perf_counter()
     trace = start_trace()
-    start_retry_window(_RETRY_WINDOW_S)
+    start_retry_window(RETRY_WINDOW_S)
 
     # A new conversation gets an unguessable id to send back for follow-ups.
     session_id = request.session_id or secrets.token_urlsafe(16)
@@ -201,13 +201,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse | JS
                 return _error_response(exc)
             raise
         if cache_key:
-            await cache.put(cache_key, {
-                "answer": result["answer"],
-                "sources": list(dict.fromkeys(result.get("sources", []))),
-                "used_tool": "chunks" in result,
-                "router_prompt_version": result.get("router_prompt_version"),
-                "answer_prompt_version": result.get("answer_prompt_version"),
-            })
+            await cache.put(cache_key, cached_answer(result))
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     answer = result["answer"]

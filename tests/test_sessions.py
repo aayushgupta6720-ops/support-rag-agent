@@ -143,7 +143,7 @@ async def test_redis_sessions_expire_and_survive_a_restart():
 
     restarted = RedisSessionStore(MemorySessionStore(3, 1800), fakeredis.FakeAsyncRedis(server=server))
     assert await restarted.history("v|s") == [Turn("user", "q"), Turn("model", "a")]
-    assert 0 < await redis.ttl("session:v|s") <= 1800
+    assert 0 < await redis.ttl("support:session:v|s") <= 1800
 
 
 async def test_while_redis_is_down_sessions_are_kept_in_the_process(monkeypatch):

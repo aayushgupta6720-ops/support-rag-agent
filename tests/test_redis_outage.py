@@ -41,7 +41,7 @@ async def test_after_a_redis_error_every_store_skips_redis_for_30s(monkeypatch):
 
     now[0] = 30
     await history.add_exchange("v|s", "q2", "a2")
-    assert await redis.llen("session:v|s") == 2  # 30s on, Redis is tried again
+    assert await redis.llen("support:session:v|s") == 2  # 30s on, Redis is tried again
     assert [e["event"] for e in events] == ["redis_unavailable"]  # once for all the stores
 
 

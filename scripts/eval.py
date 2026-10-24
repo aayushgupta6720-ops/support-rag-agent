@@ -121,7 +121,9 @@ def run_metadata(case_ids: list[str]) -> dict:
         "corpus_docs": len(load_documents()),
         "agent_mode": settings.agent_mode,
         **({"agent_prompt": prompts.AGENT_PROMPT_VERSION, "agent_max_steps": settings.agent_max_steps}
-           if settings.agent_mode == "loop" else {
+           if settings.agent_mode == "loop" else
+           {"full_context_prompt": prompts.FULL_CONTEXT_PROMPT_VERSION}
+           if settings.agent_mode == "full_context" else {
             "router_prompt": prompts.ROUTER_PROMPT_VERSION,
             "direct_answer_prompt": prompts.DIRECT_ANSWER_PROMPT_VERSION,
             "grounded_answer_prompt": prompts.GROUNDED_ANSWER_PROMPT_VERSION,

@@ -24,15 +24,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.agent import prompts  # noqa: E402
-from app.agent.graph import _generate  # noqa: E402
+from app.agent.graph import _generate, all_articles  # noqa: E402
 from app.agent.history import Turn  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.eval.dataset import load_golden_set  # noqa: E402
 from app.eval.judge import judge_answer  # noqa: E402
 from app.eval.prompts import JUDGE_PROMPT_VERSION  # noqa: E402
-from app.rag.documents import load_documents  # noqa: E402
-from app.rag.ingest import _with_title  # noqa: E402
-from app.rag.retrieval import RetrievedChunk  # noqa: E402
 from scripts.eval import _git_commit  # noqa: E402
 
 SUMMARIES_DIR = Path(__file__).resolve().parent.parent / "data" / "eval" / "summaries"
@@ -41,7 +38,7 @@ SUMMARIES_DIR = Path(__file__).resolve().parent.parent / "data" / "eval" / "summ
 async def main() -> int:
     selected = set(sys.argv[1:])
     cases = [c for c in load_golden_set() if not selected or selected & {c.id, c.category, c.split}]
-    articles = [RetrievedChunk(d.doc_id, d.title, _with_title(d.title, d.text), 1.0) for d in load_documents()]
+    articles = list(all_articles())
     rows = []
     for i, case in enumerate(cases, 1):
         history = [Turn(**turn) for turn in case.history]

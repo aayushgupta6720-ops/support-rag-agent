@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,6 +13,7 @@ from app.api.feedback import router as feedback_router
 from app.api.ratelimit import build_rate_limiters
 from app.api.routes import router
 from app.api.sessions import build_session_store
+from app.api.warmup import warm_suggested_answers
 from app.core.config import get_settings
 from app.core.observability import configure_logging, log_event
 from app.core.redis_client import RedisOutage, get_redis
@@ -18,7 +21,18 @@ from app.core.redis_client import RedisOutage, get_redis
 settings = get_settings()
 configure_logging()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # In the background: the request that woke the instance shouldn't wait for it.
+    warmup = asyncio.create_task(warm_suggested_answers(app.state)) if settings.answer_warmup else None
+    yield
+    if warmup:
+        warmup.cancel()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title=settings.app_name,
     version="0.1.0",
     description=(

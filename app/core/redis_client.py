@@ -2,9 +2,14 @@ import time
 from functools import lru_cache
 from typing import Callable
 
-from redis.asyncio import Redis
+from redis.asyncio import BlockingConnectionPool, Redis
 
 from app.core.config import get_settings
+
+# The Render Key Value instance is shared with my other apps, so every key this
+# app writes starts with this: no name can collide with theirs, and a SCAN for
+# support:* shows exactly what this app holds.
+KEY_PREFIX = "support:"
 
 
 @lru_cache
@@ -12,11 +17,18 @@ def get_redis() -> Redis | None:
     """The shared Redis client, or None when REDIS_URL is unset. Timeouts are
     short because every caller falls back to in-process state when Redis
     fails, and RedisOutage then skips Redis for a while: a slow Redis should
-    cost one request a couple of seconds, not hang it or every one after it."""
+    cost one request a couple of seconds, not hang it or every one after it.
+
+    At most 10 connections: the free instance allows 50 across every app that
+    shares it. A request that finds all 10 busy waits up to 2s for one, then
+    falls back like any other Redis error."""
     url = get_settings().redis_url
     if not url:
         return None
-    return Redis.from_url(url, socket_timeout=2, socket_connect_timeout=2, health_check_interval=30)
+    pool = BlockingConnectionPool.from_url(
+        url, max_connections=10, timeout=2, socket_timeout=2, socket_connect_timeout=2, health_check_interval=30
+    )
+    return Redis(connection_pool=pool)
 
 
 class RedisOutage:

@@ -17,7 +17,7 @@ from redis.exceptions import RedisError
 from app.agent.history import Turn
 from app.core.config import Settings
 from app.core.observability import log_event
-from app.core.redis_client import RedisOutage
+from app.core.redis_client import KEY_PREFIX, RedisOutage
 
 
 class MemorySessionStore:
@@ -70,7 +70,7 @@ class RedisSessionStore:
         if self._outage.skip():
             return await self._fallback.history(key)
         try:
-            raw = await self._redis.lrange(f"session:{key}", 0, -1)
+            raw = await self._redis.lrange(f"{KEY_PREFIX}session:{key}", 0, -1)
         except RedisError as exc:
             self._failed(exc)
             return await self._fallback.history(key)
@@ -81,7 +81,7 @@ class RedisSessionStore:
         if self._outage.skip():
             await self._fallback.add_exchange(key, question, answer)
             return
-        name = f"session:{key}"
+        name = f"{KEY_PREFIX}session:{key}"
         turns = [Turn("user", question), Turn("model", answer)]
         try:
             async with self._redis.pipeline(transaction=True) as pipe:

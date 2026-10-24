@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 import app.api.answer_cache as answer_cache
 import app.api.routes as routes
 from app.api.answer_cache import MemoryAnswerCache, RedisAnswerCache, answer_cache_key, build_answer_cache
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.observability import time_step
 from app.main import app
 from tests.fakes import chunk
@@ -160,7 +160,7 @@ async def test_a_redis_answer_is_stored_with_its_ttl_and_survives_a_restart():
 
     restarted = RedisAnswerCache(MemoryAnswerCache(3600), fakeredis.FakeAsyncRedis(server=server))
     assert await restarted.get("k") == {"answer": "a"}
-    assert 0 < await redis.ttl("answer:k") <= 3600
+    assert 0 < await redis.ttl("support:answer:k") <= 3600
 
 
 async def test_while_redis_is_down_answers_are_cached_in_the_process(monkeypatch):
@@ -183,3 +183,16 @@ async def test_a_store_can_delete_an_answer(store):
 
     assert await store.get("k") is None
     await store.delete("never-there")  # deleting a missing key is fine
+
+
+def test_the_key_changes_with_the_agent_mode_and_the_articles(monkeypatch):
+    before = answer_cache_key("How do refunds work?")
+    monkeypatch.setattr(get_settings(), "agent_mode", "full_context")
+    assert answer_cache_key("How do refunds work?") != before
+    monkeypatch.setattr(get_settings(), "agent_mode", "router")
+    monkeypatch.setattr(answer_cache, "corpus_version", lambda: "edited articles")
+    assert answer_cache_key("How do refunds work?") != before
+
+
+def test_answers_are_kept_for_a_week_by_default():
+    assert Settings.model_fields["answer_cache_ttl_s"].default == 7 * 24 * 3600

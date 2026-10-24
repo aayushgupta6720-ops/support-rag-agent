@@ -23,6 +23,7 @@ app/
   api/ratelimit.py     Per-visitor /chat limits, counted in Redis (or in memory)
   api/sessions.py      Multi-turn chat history per session, in Redis (or in memory)
   api/answer_cache.py  Reused answers to repeat first questions, in Redis (or in memory)
+  api/warmup.py        Answers the page's suggested questions before anyone asks (with Redis)
   api/feedback.py      Thumbs up/down ratings, in Redis (or in memory), and the token-protected export
   api/body_limit.py    Refuses oversized request bodies before they're read
   core/config.py       Settings, loaded from .env
@@ -37,7 +38,8 @@ app/
     ingest.py           Chunk + title-prefix + embed + upsert documents
     retrieval.py        Embed a query and fetch top-k chunks
   agent/
-    graph.py           LangGraph agent: route -> (retrieve) -> generate (AGENT_MODE=router, live)
+    graph.py           LangGraph agent: route -> (retrieve) -> generate (AGENT_MODE=router, live);
+                       one call with every article (AGENT_MODE=full_context)
     loop.py            LangGraph tool loop: agent <-> tools until give_answer (AGENT_MODE=loop)
     history.py         Earlier conversation turns, as Gemini contents
     prompts.py         Versioned system prompts
@@ -130,8 +132,26 @@ its own queries; read a whole article with `read_article` when a search found
 the right one but not the passage it needs; and it ends the turn only by
 calling `give_answer` with its reply and the ids of the articles it used.
 Every turn must be a tool call, so an answer always comes with its sources,
-and after four steps it may only answer. Both modes return the same shape, so
-`/chat`, the answer cache and every eval work with either.
+and after four steps it may only answer.
+
+`AGENT_MODE=full_context` skips the router and the search: one call answers
+with every article in the prompt (`run_full_context` in `app/agent/graph.py`).
+The whole help center is about 8,700 characters, so it fits, and a question
+costs one request instead of two, which doubles what the free tier's daily
+quota covers (in money it's a little dearer: $0.00099 a question against the
+router's $0.00071, since every question carries every article). The router
+stays for a help center too big to send whole. All three modes return the
+same shape, so `/chat`, the answer cache and every eval work with any of them.
+
+It isn't live yet. On 2026-10-25, with the router's grounded prompt, it
+scored 40/41 held-out and 43/45 on the outside-written cases (the router's
+3-run means are 39.7 and 44.3), but 78/86 on dev: 9 of its 11 failures were
+greetings, "what can you help with?" and off-topic requests, which got "I
+don't have enough information", since there's no router to send them to the
+direct-answer prompt. Its own prompt, `full_context_v1`, adds the
+direct-answer rules for those, and all 25 greeting, capability, off-topic and
+adversarial cases then passed. A full run with `full_context_v1` comes before
+switching.
 
 Or open `http://localhost:8000/` for the help center. It's a page for a
 fictional company, Tidewell, with topic cards, a search box, and a chat
@@ -190,21 +210,26 @@ well as the id: a client can pick its own `session_id`, and without that,
 anyone reusing an id could continue someone else's conversation.
 
 The first question of a conversation is answered from a cache when someone
-has asked the same thing in the last hour (`ANSWER_CACHE_TTL_S`, 0 turns it
+has asked the same thing in the last week (`ANSWER_CACHE_TTL_S`, 0 turns it
 off). The help center's topic cards and chips send the same few questions
 over and over, so this makes them instant and stops each one costing two
-Gemini calls.
+Gemini calls. A minute after startup, the app answers any of those 15
+questions (read from the page's `data-ask` attributes and the widget's chips)
+that aren't cached yet, a few seconds apart and counted against the daily
+budget (`app/api/warmup.py`, `ANSWER_WARMUP`). Once they're cached, a restart
+costs nothing; it only does this with Redis, since an in-process cache would
+be refilled every time the free instance wakes.
 
 - **What counts as the same:** case and extra whitespace don't matter.
 - **What makes it miss:** the key also covers the models, prompt versions,
-  retrieval settings and collection, so changing any of them misses instead
-  of serving an answer made the old way.
+  retrieval settings, agent mode, collection and a hash of the articles in
+  `data/docs`, so changing any of them misses instead of serving an answer
+  made the old way. That's what makes a week safe.
 - **Privacy:** only a hash of the question is stored, never its text.
-- **Limits:** follow-ups are never cached. After re-ingesting changed docs,
-  cached answers can lag for up to the TTL.
+- **Limits:** follow-ups are never cached.
 - **Bad answers:** a thumbs-down on a cached answer removes it, so the next
-  visitor gets a fresh one rather than the same bad answer for up to an
-  hour. It only does this if the cache still holds exactly the rated
+  visitor gets a fresh one rather than the same bad answer for up to a
+  week. It only does this if the cache still holds exactly the rated
   answer, so a made-up rating can't evict a different one.
 - **Where it lives:** the cache is in Redis when `REDIS_URL` is set,
   otherwise in memory. The log line says `cache_hit`.
@@ -711,7 +736,12 @@ Rate-limit counts, chat sessions, cached answers, feedback ratings and the
 record of each answer given (by `answer_id`, for a day) live in a Render Key
 Value instance named `support-rag-agent-kv` (Valkey 8, free plan, same
 region, internal access only, `allkeys-lru` eviction since every key has a
-TTL except the ratings list, which is capped at 2,000). It's a separate
+TTL except the ratings list, which is capped at 2,000). Every key starts
+with `support:`, since the instance is shared with two of my other apps
+(theirs start `ecommerce:` and `student-assistant:`), and the app opens at
+most 10 of the free plan's 50 connections. Ratings saved before the prefix,
+under `feedback`, are moved to `support:feedback` the first time they're read
+or added to. It's a separate
 entry on the Render dashboard, listed as "Available" where the web service
 says "Deployed". `render.yaml` doesn't create it: the instance was made by
 hand in the dashboard, so a fresh Blueprint deploy needs one created first

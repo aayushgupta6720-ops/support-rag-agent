@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     # search runs once, and a second call answers. "loop": one model calls
     # tools (search, read an article, give the answer) until it answers, at
     # most agent_max_steps calls before it must answer (app/agent/loop.py).
+    # "full_context": no router or search; one call answers with every
+    # article in the prompt (run_full_context in app/agent/graph.py).
     agent_mode: str = "router"
     agent_max_steps: int = 4
     chunk_max_chars: int = 800
@@ -73,8 +75,14 @@ class Settings(BaseSettings):
     session_max_exchanges: int = Field(default=3, ge=1)
     session_ttl_s: int = 1800
     # How long the answer to a conversation's first question is reused for an
-    # identical question (see app/api/answer_cache.py). 0 turns caching off.
-    answer_cache_ttl_s: int = 3600
+    # identical question (see app/api/answer_cache.py). 0 turns caching off. A
+    # week: the key changes whenever the articles, prompts, models or settings
+    # do, so a long TTL can't serve an answer made the old way.
+    answer_cache_ttl_s: int = 7 * 24 * 3600
+    # A minute after startup, answer the help center's suggested questions that
+    # aren't cached yet, so a click on a topic card is answered from the cache
+    # (app/api/warmup.py). Needs Redis; does nothing without it.
+    answer_warmup: bool = True
     # Bearer token for GET /feedback/export. Unset turns the endpoint off.
     feedback_export_token: str = ""
 

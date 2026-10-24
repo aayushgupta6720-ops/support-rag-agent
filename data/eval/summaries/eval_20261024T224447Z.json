@@ -1,0 +1,112 @@
+{
+  "run": {
+    "git_commit": "a039550-dirty",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "retrieval_top_k": 4,
+    "retrieval_min_score": 0.0,
+    "retrieval_max_score_gap": 0.1,
+    "retrieval_expand_docs": false,
+    "corpus_docs": 11,
+    "agent_mode": "full_context",
+    "full_context_prompt": "grounded_answer_v7",
+    "judge_prompt": "judge_v2",
+    "judge_max_votes": 3,
+    "cases": 172,
+    "settings_match_render": true
+  },
+  "judge_pass_rate": 0.936046511627907,
+  "retrieval_hit_rate": 1.0,
+  "retrieval_recall": 1.0,
+  "mrr": 0.312238455988456,
+  "hit_at_1": 0.12857142857142856,
+  "context_precision": 0.1064935064935065,
+  "citation_precision": 0.927536231884058,
+  "citation_recall": 0.9696428571428571,
+  "spurious_citations": [
+    "x_unanswerable_data_centers"
+  ],
+  "cost_usd": {
+    "agent": 0.171033,
+    "judge": 0.153613,
+    "total": 0.324646
+  },
+  "agent_latency_ms": {
+    "n": 172,
+    "p50": 1500.8,
+    "p95": 39404.0,
+    "max": 61886.2
+  },
+  "model_requests": 356,
+  "agent_requests": 172,
+  "by_split": {
+    "dev": {
+      "passed": 78,
+      "total": 86
+    },
+    "external": {
+      "passed": 43,
+      "total": 45
+    },
+    "held_out": {
+      "passed": 40,
+      "total": 41
+    }
+  },
+  "by_category": {
+    "adversarial": {
+      "passed": 11,
+      "total": 11
+    },
+    "direct": {
+      "passed": 3,
+      "total": 7
+    },
+    "false_premise": {
+      "passed": 16,
+      "total": 16
+    },
+    "grounded": {
+      "passed": 45,
+      "total": 45
+    },
+    "multi_doc": {
+      "passed": 19,
+      "total": 20
+    },
+    "multi_turn": {
+      "passed": 15,
+      "total": 15
+    },
+    "out_of_scope": {
+      "passed": 2,
+      "total": 7
+    },
+    "reasoning": {
+      "passed": 30,
+      "total": 30
+    },
+    "robustness": {
+      "passed": 5,
+      "total": 5
+    },
+    "unanswerable": {
+      "passed": 15,
+      "total": 16
+    }
+  },
+  "failed": [
+    "greeting_1",
+    "out_of_scope_trivia",
+    "direct_capabilities",
+    "out_of_scope_weather",
+    "out_of_scope_cover_letter",
+    "direct_what_questions",
+    "direct_are_you_human",
+    "ho_out_of_scope_laptop",
+    "h3_out_of_scope_sql",
+    "x_paid_bulk_export_limit",
+    "x_unanswerable_data_centers"
+  ],
+  "errored": []
+}
