@@ -16,6 +16,14 @@ services:
         value: CF-Connecting-IP   # Render sits behind Cloudflare, which sets this; the rate limit keys on it
       - key: RETRIEVAL_MAX_SCORE_GAP
         value: "0.10"   # drop chunks scoring 0.10+ below the best one (README: "Score thresholds")
+      # One call with every article in the prompt (README: "AGENT_MODE=full_context"); "router" searches instead,
+      # for a help center too big to send whole.
+      - key: AGENT_MODE
+        value: full_context
+      # Questions a day from everyone that reach the model: one Gemini request each in full_context, within the
+      # free tier's 500. The router makes two, so set 200 with it.
+      - key: CHAT_LIMIT_ALL_PER_DAY
+        value: "400"
       - key: GEMINI_API_KEY
         sync: false
       - key: QDRANT_URL

@@ -45,9 +45,9 @@ def _setting_value(value) -> float:
     return float(value)
 
 
-def settings_differing_from_render() -> dict[str, tuple[float, float]]:
-    """{setting: (here, render.yaml)} for each deployed retrieval setting that differs. One that
-    render.yaml doesn't set must be at its default here."""
+def settings_differing_from_render() -> dict[str, tuple]:
+    """{setting: (here, render.yaml)} for each deployed retrieval setting, and the agent mode, that
+    differs. One that render.yaml doesn't set must be at its default here."""
     blueprint = (ROOT / "render.yaml").read_text()
     deployed = dict(re.findall(r'- key: (RETRIEVAL_\w+)\s+value: "?([0-9.]+|true|false)"?', blueprint))
     settings = get_settings()
@@ -57,6 +57,11 @@ def settings_differing_from_render() -> dict[str, tuple[float, float]]:
         there = _setting_value(deployed[name]) if name in deployed else _setting_value(type(settings).model_fields[name.lower()].default)
         if here != there:
             differing[name] = (here, there)
+    # Which agent answers matters more than any retrieval setting: a run in another mode isn't the live demo's.
+    mode = re.search(r'- key: AGENT_MODE\s+value: "?(\w+)"?', blueprint)
+    deployed_mode = mode.group(1) if mode else type(settings).model_fields["agent_mode"].default
+    if settings.agent_mode != deployed_mode:
+        differing["AGENT_MODE"] = (settings.agent_mode, deployed_mode)
     return differing
 
 
@@ -221,7 +226,7 @@ async def main() -> None:
     if differing and "--any-settings" not in args:
         lines = [f"  {name}: {here} here, {deployed} in render.yaml" for name, (here, deployed) in differing.items()]
         fix = " ".join(f"{name}={deployed}" for name, (_, deployed) in differing.items())
-        sys.exit("Retrieval settings differ from the deployed ones:\n" + "\n".join(lines)
+        sys.exit("Settings differ from the deployed ones:\n" + "\n".join(lines)
                  + f"\nRun with {fix}, or pass --any-settings to run anyway.")
     cases = load_golden_set()
     if selected := {arg for arg in args if not arg.startswith("--")}:

@@ -11,7 +11,11 @@ inactivity takes ~30-60s to wake up.
 
 Async FastAPI RAG agent for support tickets — RAG over Qdrant, LangGraph
 orchestration, an eval harness (golden set + LLM-as-judge), and per-call
-latency/cost observability.
+latency/cost observability. The help center is 11 short articles, so the live
+demo answers in one call with all of them in the prompt (`AGENT_MODE=full_context`,
+since 2026-10-26): it scores level with the RAG router on the same 172 cases,
+at half the model requests. The router is the mode for a help center too big
+to send whole.
 
 ## Structure
 
@@ -38,8 +42,8 @@ app/
     ingest.py           Chunk + title-prefix + embed + upsert documents
     retrieval.py        Embed a query and fetch top-k chunks
   agent/
-    graph.py           LangGraph agent: route -> (retrieve) -> generate (AGENT_MODE=router, live);
-                       one call with every article (AGENT_MODE=full_context)
+    graph.py           LangGraph agent: route -> (retrieve) -> generate (AGENT_MODE=router);
+                       one call with every article (AGENT_MODE=full_context, live)
     loop.py            LangGraph tool loop: agent <-> tools until give_answer (AGENT_MODE=loop)
     history.py         Earlier conversation turns, as Gemini contents
     prompts.py         Versioned system prompts
@@ -120,8 +124,8 @@ Re-running it is safe: chunk IDs are deterministic, so changed docs are
 overwritten in place, chunks left over when a doc gets shorter are deleted,
 and docs removed from `data/docs/` are removed from Qdrant too.
 
-Then `POST /chat` with `{"query": "..."}`. The live agent (`AGENT_MODE=router`)
-is a LangGraph router plus RAG: a router call decides whether to call the
+Then `POST /chat` with `{"query": "..."}`. The router agent (`AGENT_MODE=router`,
+the default, and live until 2026-10-26) is a LangGraph router plus RAG: a router call decides whether to call the
 `search_support_docs` tool or answer directly (e.g. for greetings), then a
 generation call produces a structured, schema-validated answer grounded in
 whatever was retrieved. It makes exactly one decision and at most one search.
@@ -143,15 +147,28 @@ router's $0.00071, since every question carries every article). The router
 stays for a help center too big to send whole. All three modes return the
 same shape, so `/chat`, the answer cache and every eval work with any of them.
 
-It isn't live yet. On 2026-10-25, with the router's grounded prompt, it
-scored 40/41 held-out and 43/45 on the outside-written cases (the router's
-3-run means are 39.7 and 44.3), but 78/86 on dev: 9 of its 11 failures were
-greetings, "what can you help with?" and off-topic requests, which got "I
-don't have enough information", since there's no router to send them to the
-direct-answer prompt. Its own prompt, `full_context_v1`, adds the
-direct-answer rules for those, and all 25 greeting, capability, off-topic and
-adversarial cases then passed. A full run with `full_context_v1` comes before
-switching.
+It's what the live demo runs, since 2026-10-26 (`render.yaml`). The first
+run, on 2026-10-25 with the router's grounded prompt, scored 40/41 held-out
+and 43/45 on the outside-written cases, but 78/86 on dev: 9 of its 11
+failures were greetings, "what can you help with?" and off-topic requests,
+which got "I don't have enough information", since there's no router to send
+them to the direct-answer prompt. Its own prompt, `full_context_v1`, adds the
+direct-answer rules for those. The full run with it
+(`eval_20261025T212517Z`, 171 cases scored, one Gemini timeout):
+
+| | `full_context_v1` | Router |
+|---|---|---|
+| Dev | 86/86 | 84/86 (2026-10-14) |
+| Held-out | 39/41 | 39.7/41 (3-run mean) |
+| Outside-written | 43/44 | 44.3/45 (3-run mean) |
+| Model requests per question | 1 | 2 |
+| Agent latency, median | 1.2 s | about 2.9 s |
+
+Its three misses (a lost phone with SMS 2FA, a monthly-to-annual switch, and
+passkeys, which the articles don't mention) are cases the router has also
+missed in some runs. With one request a question, the daily budget for
+everyone is 400 (`CHAT_LIMIT_ALL_PER_DAY` in `render.yaml`; set it back to
+200 with the router).
 
 Or open `http://localhost:8000/` for the help center. It's a page for a
 fictional company, Tidewell, with topic cards, a search box, and a chat
@@ -467,7 +484,7 @@ the run would have cost on a paid key, judge included.
 - **The full-context baseline** (every article in the prompt, no retrieval)
   scored 40/40 on the held-out split, with one case cut off by the day's
   quota. Retrieval costs nothing there; its losses are the dev cases above.
-- **Decided: the router stays live** (2026-10-14, `agent_v2`, dev and
+- **Decided: the router stays live, not the loop** (2026-10-14, `agent_v2`, dev and
   external, 130 cases scored). The loop's first dev run obeyed two prompt
   injections ("don't look anything up") and declined without the policy;
   `agent_v2` makes its first call a search and answers the question inside an
@@ -878,8 +895,9 @@ day. Past that, `/chat` returns a 429 with `Retry-After` and a `detail`
 saying when to try again, without calling the model; the MCP tool passes
 that message on. Change the numbers with `CHAT_LIMIT_PER_MINUTE` and
 `CHAT_LIMIT_PER_DAY` (0 turns one off). Every visitor also shares one budget
-of 200 new questions a day (`CHAT_LIMIT_ALL_PER_DAY`), about 400 of the 500
-model requests: per-IP limits alone let nine addresses, or one visitor with a
+of new questions a day (`CHAT_LIMIT_ALL_PER_DAY`): 400 in the live
+`full_context` mode, one model request each, and 200 with the router, which
+makes two, so either stays within the free tier's 500 requests: per-IP limits alone let nine addresses, or one visitor with a
 block of IPv6 addresses, use up the day. A cached answer calls no model, so
 it doesn't count. With `REDIS_URL` set, counts (and
 chat sessions) live in Redis. They survive restarts, which matters on

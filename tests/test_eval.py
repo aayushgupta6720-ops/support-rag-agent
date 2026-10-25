@@ -310,7 +310,11 @@ def test_eval_runs_only_with_the_deployed_retrieval_settings(monkeypatch):
 
     settings = get_settings()
     monkeypatch.setattr(settings, "retrieval_max_score_gap", 0.10)  # render.yaml's
+    monkeypatch.setattr(settings, "agent_mode", "full_context")  # render.yaml's
     assert settings_differing_from_render() == {}
+    monkeypatch.setattr(settings, "agent_mode", "router")
+    assert settings_differing_from_render() == {"AGENT_MODE": ("router", "full_context")}
+    monkeypatch.setattr(settings, "agent_mode", "full_context")
     monkeypatch.setattr(settings, "retrieval_expand_docs", True)  # render.yaml leaves it at the default, off
     assert settings_differing_from_render() == {"RETRIEVAL_EXPAND_DOCS": (1.0, 0.0)}
     monkeypatch.setattr(settings, "retrieval_expand_docs", False)
